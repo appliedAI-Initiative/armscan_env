@@ -599,6 +599,17 @@ files = [
 colorama = {version = "*", markers = "platform_system == \"Windows\""}
 
 [[package]]
+name = "cloudpickle"
+version = "3.0.0"
+description = "Pickler class to extend the standard pickle.Pickler functionality"
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "cloudpickle-3.0.0-py3-none-any.whl", hash = "sha256:246ee7d0c295602a036e86369c77fecda4ab17b506496730f2f576d9016fd9c7"},
+    {file = "cloudpickle-3.0.0.tar.gz", hash = "sha256:996d9a482c6fb4f33c1a35335cf8afd065d2a56e973270364840712d9131a882"},
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 description = "Cross-platform colored terminal text."
@@ -829,6 +840,17 @@ files = [
 tests = ["asttokens (>=2.1.0)", "coverage", "coverage-enable-subprocess", "ipython", "littleutils", "pytest", "rich"]
 
 [[package]]
+name = "farama-notifications"
+version = "0.0.4"
+description = "Notifications for all Farama Foundation maintained libraries."
+optional = false
+python-versions = "*"
+files = [
+    {file = "Farama-Notifications-0.0.4.tar.gz", hash = "sha256:13fceff2d14314cf80703c8266462ebf3733c7d165336eee998fc58e545efd18"},
+    {file = "Farama_Notifications-0.0.4-py3-none-any.whl", hash = "sha256:14de931035a41961f7c056361dc7f980762a143d05791ef5794a751a2caf05ae"},
+]
+
+[[package]]
 name = "fastjsonschema"
 version = "2.19.1"
 description = "Fastest Python implementation of JSON schema"
@@ -939,6 +961,36 @@ files = [
 [package.extras]
 docs = ["Sphinx", "furo"]
 test = ["objgraph", "psutil"]
+
+[[package]]
+name = "gymnasium"
+version = "0.29.1"
+description = "A standard API for reinforcement learning and a diverse set of reference environments (formerly Gym)."
+optional = false
+python-versions = ">=3.8"
+files = [
+    {file = "gymnasium-0.29.1-py3-none-any.whl", hash = "sha256:61c3384b5575985bb7f85e43213bcb40f36fcdff388cae6bc229304c71f2843e"},
+    {file = "gymnasium-0.29.1.tar.gz", hash = "sha256:1a532752efcb7590478b1cc7aa04f608eb7a2fdad5570cd217b66b6a35274bb1"},
+]
+
+[package.dependencies]
+cloudpickle = ">=1.2.0"
+farama-notifications = ">=0.0.1"
+numpy = ">=1.21.0"
+typing-extensions = ">=4.3.0"
+
+[package.extras]
+accept-rom-license = ["autorom[accept-rom-license] (>=0.4.2,<0.5.0)"]
+all = ["box2d-py (==2.3.5)", "cython (<3)", "imageio (>=2.14.1)", "jax (>=0.4.0)", "jaxlib (>=0.4.0)", "lz4 (>=3.1.0)", "matplotlib (>=3.0)", "moviepy (>=1.0.0)", "mujoco (>=2.3.3)", "mujoco-py (>=2.1,<2.2)", "opencv-python (>=3.0)", "pygame (>=2.1.3)", "shimmy[atari] (>=0.1.0,<1.0)", "swig (==4.*)", "torch (>=1.0.0)"]
+atari = ["shimmy[atari] (>=0.1.0,<1.0)"]
+box2d = ["box2d-py (==2.3.5)", "pygame (>=2.1.3)", "swig (==4.*)"]
+classic-control = ["pygame (>=2.1.3)", "pygame (>=2.1.3)"]
+jax = ["jax (>=0.4.0)", "jaxlib (>=0.4.0)"]
+mujoco = ["imageio (>=2.14.1)", "mujoco (>=2.3.3)"]
+mujoco-py = ["cython (<3)", "cython (<3)", "mujoco-py (>=2.1,<2.2)", "mujoco-py (>=2.1,<2.2)"]
+other = ["lz4 (>=3.1.0)", "matplotlib (>=3.0)", "moviepy (>=1.0.0)", "opencv-python (>=3.0)", "torch (>=1.0.0)"]
+testing = ["pytest (==7.1.3)", "scipy (>=1.7.3)"]
+toy-text = ["pygame (>=2.1.3)", "pygame (>=2.1.3)"]
 
 [[package]]
 name = "h11"
@@ -3275,6 +3327,40 @@ testing = ["build[virtualenv]", "filelock (>=3.4.0)", "flake8-2020", "ini2toml[l
 testing-integration = ["build[virtualenv] (>=1.0.3)", "filelock (>=3.4.0)", "jaraco.envs (>=2.2)", "jaraco.path (>=3.2.0)", "packaging (>=23.2)", "pytest", "pytest-enabler", "pytest-xdist", "tomli", "virtualenv (>=13.0.0)", "wheel"]
 
 [[package]]
+name = "simpleitk"
+version = "2.3.1"
+description = "SimpleITK is a simplified interface to the Insight Toolkit (ITK) for image registration and segmentation"
+optional = false
+python-versions = "*"
+files = [
+    {file = "SimpleITK-2.3.1-cp310-cp310-macosx_10_9_x86_64.whl", hash = "sha256:e9075c266d2be99a67708c9b4c34143a85f65c5367b09c37549aeaf47e66210f"},
+    {file = "SimpleITK-2.3.1-cp310-cp310-macosx_11_0_arm64.whl", hash = "sha256:977c47b4a7a7737b4413bcce12125794a342455d4a0647cea40f8473bc395330"},
+    {file = "SimpleITK-2.3.1-cp310-cp310-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:d30c730f8ec3035d3675bd754d13d034c101b7823e10e0ab8bf68ee9bbbc1581"},
+    {file = "SimpleITK-2.3.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:1d1c81beb667fc82cd25ecaca35337e97bb85b805a3b763488132e395b698824"},
+    {file = "SimpleITK-2.3.1-cp310-cp310-win_amd64.whl", hash = "sha256:752dde0a518cad3bc1a0f06efa9a071734a5bfafdb0cc784369968128f7ec198"},
+    {file = "SimpleITK-2.3.1-cp311-cp311-macosx_10_9_x86_64.whl", hash = "sha256:df43581c6984af5353730834a95116cdd8dcaef1dc13e4e9a326f608f8fba74a"},
+    {file = "SimpleITK-2.3.1-cp311-cp311-macosx_11_0_arm64.whl", hash = "sha256:bd1c3d7f65bf5855013121bd9f2a683f4c429b746f5cc41f84af08dd28c92573"},
+    {file = "SimpleITK-2.3.1-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:5d088fbfbbd639aebe99aed0d9cf69364e2e8e7f4771fa2acc1017f1126a497c"},
+    {file = "SimpleITK-2.3.1-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:39cd45cf257e1a4469576e90fd0c476685b3b66d1f471d34677dd7f3876601b6"},
+    {file = "SimpleITK-2.3.1-cp311-cp311-win_amd64.whl", hash = "sha256:2aec554a4656dc84195711a8ebfe89477aa66dce2d8c2fd81890ea96ecb725fb"},
+    {file = "SimpleITK-2.3.1-cp312-cp312-macosx_10_9_x86_64.whl", hash = "sha256:2275568360bb4d99fba5cddfe815d9b1d1f673e1333922a78093cea0531eb6f8"},
+    {file = "SimpleITK-2.3.1-cp312-cp312-macosx_11_0_arm64.whl", hash = "sha256:dbbab1f3fe63147b482682cbfdaf5ae39032a9b2bf7428c0e96c46d1d4f2d6cf"},
+    {file = "SimpleITK-2.3.1-cp312-cp312-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:92aacf919164e4b3a8e3554e64868c3ef0e6a39d50acdf9f4ef04ccee2fbc036"},
+    {file = "SimpleITK-2.3.1-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:7b4b9e7d64e53539216666a6b5b477e033e8738b1725f938e3c331b07539bd82"},
+    {file = "SimpleITK-2.3.1-cp312-cp312-win_amd64.whl", hash = "sha256:72dd0bd010ee5d0482c1db37bc82d3a6e79807641760abd94ebe16592db62da1"},
+    {file = "SimpleITK-2.3.1-cp38-cp38-macosx_10_9_x86_64.whl", hash = "sha256:76e6fffd7c4953a1e313aa48606e157cc781275955d80a03fe5be2d3b5d9709c"},
+    {file = "SimpleITK-2.3.1-cp38-cp38-macosx_11_0_arm64.whl", hash = "sha256:332947cdfa91a5ecb0a36cc486e7eafd4212e772901b78948d6b530ac935356a"},
+    {file = "SimpleITK-2.3.1-cp38-cp38-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:9164d3c4183eeb9639d830c5803d05825380ef604f42897007492df969760542"},
+    {file = "SimpleITK-2.3.1-cp38-cp38-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:d1225ea122dc75bcdaec0ddcfffa4771c27c53acc36968cf1256e861a265abf8"},
+    {file = "SimpleITK-2.3.1-cp38-cp38-win_amd64.whl", hash = "sha256:7629299636010b25bc64100428af1cd8beed72e07d44352c05ceb0576e962f67"},
+    {file = "SimpleITK-2.3.1-cp39-cp39-macosx_10_9_x86_64.whl", hash = "sha256:8a1470a1c83f4765ff869240d1a57fc2f16e73007858d4055e171eefb5e753c0"},
+    {file = "SimpleITK-2.3.1-cp39-cp39-macosx_11_0_arm64.whl", hash = "sha256:decf5296fd112334e8450a7ac9c360781ac7b250368cf26b9d90a4b04fdd36a2"},
+    {file = "SimpleITK-2.3.1-cp39-cp39-manylinux_2_17_aarch64.manylinux2014_aarch64.whl", hash = "sha256:61847b4c2edbeb88a5943f7a6ea51ffbba32df33df2c05d36640832dae4b075f"},
+    {file = "SimpleITK-2.3.1-cp39-cp39-manylinux_2_17_x86_64.manylinux2014_x86_64.whl", hash = "sha256:0a81f950b76f34db65feb6c38629ecac5dcfd31a3d89a53789eefbeb6bfa4e19"},
+    {file = "SimpleITK-2.3.1-cp39-cp39-win_amd64.whl", hash = "sha256:aec45af0ec031ed2a18f4dc8e2a12188817c789ea1db0a2c863506dce9ae2b87"},
+]
+
+[[package]]
 name = "six"
 version = "1.16.0"
 description = "Python 2 and 3 compatibility utilities"
@@ -4209,4 +4295,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "88704e6eb32426cddabd447cbcf85cb8e5016ed4c157f2abd4490089586cf616"
+content-hash = "96d1c841cbbef4a98fa4e60c41df7fc847c1a7406101fda8a390514d9fe54867"

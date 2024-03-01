@@ -19,10 +19,12 @@ exclude = ["test/*", "examples/*", "docs/*"]
 [tool.poetry.dependencies]
 python = "^3.11"
 accsr = "^0.4.6"
+gymnasium = "^0.29.1"
 pandas = "^2.2.1"
 plotly = "^5.19.0"
 pytest = "^8.0.2"
 pytest-lazy-fixtures = "^1.0.5"
+simpleitk = "^2.3.1"
 
 [tool.poetry.group.dev]
 optional = true

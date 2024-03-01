@@ -217,6 +217,7 @@ class ModularEnv(gym.Env[TObs, TAction], Generic[TStateAction, TAction, TObs], A
         return self.cur_observation, self.get_info_dict()
 
     def step(self, action: TAction) -> tuple[TObs, float, bool, bool, dict[str, Any]]:
+        """Step through the environment to navigate to the next state."""
         self._go_to_next_state(action)
         self._cur_episode_len += 1
         assert self.cur_observation is not None

@@ -14,6 +14,38 @@ from armscan_env.envs.base import (
 )
 from armscan_env.slicing import slice_volume
 from armscan_env.util.img_processing import crop_center
+from typing import Self
+
+
+@dataclass(kw_only=True)
+class ManipulatorAction:
+    z_rotation: float
+    
+    rotation: np.ndarray
+    """Array of shape (2,) representing two angles"""
+    translation: np.ndarray
+    """Array of shape (2,) representing two translations"""
+
+
+    def to_array(self, angle_bounds: Optional[tuple[float, float]] = None) -> np.ndarray:
+        """Converts the action to a 1D array. If angle_bounds is not None, the angles will be normalized to the range
+        [-1, 1] using the provided bounds."""
+        if angle_bounds is not None:
+            rotation = (self.rotation - angle_bounds[0]) / (angle_bounds[1] - angle_bounds[0]) * 2 - 1
+        else:
+            rotation = self.rotation
+        return np.concatenate([rotation, self.translation])
+
+    @classmethod
+    def from_array(cls, action: np.ndarray, angle_bounds: Optional[tuple[float, float]] = None) -> Self:
+        """Converts a 1D array to a ManipulatorAction. If angle_bounds is not None, the angles will be unnormalized
+        using the provided bounds."""
+        if angle_bounds is not None:
+            rotation = (action[:2] + 1) / 2 * (angle_bounds[1] - angle_bounds[0]) + angle_bounds[0]
+        else:
+            rotation = action[:2]
+        return cls(rotation=rotation, translation=action[2:])
+
 
 
 @dataclass(kw_only=True)
@@ -63,16 +95,6 @@ class LabelmapEnvTerminationCriterion(TerminationCriterion["LabelmapEnv"], ABC):
     pass
 
 
-def unnormalize_rotation_translation(action: np.ndarray) -> np.ndarray:
-    """Unnormalizes an array with values in the range [-1, 1] to the original range that is
-    consumed by :func:`slice_volume`.
-
-    :param action: normalized action with values in the range [-1, 1]
-    :return: unnormalized action that can be used with :func:`slice_volume`
-    """
-    # TODO: implement
-    return action
-
 
 class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
     _INITIAL_POS_ROTATION = np.zeros(4)
@@ -84,6 +106,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         reward_metric: RewardMetric[LabelmapStateAction] | None = None,
         termination_criterion: TerminationCriterion | None = None,
         max_episode_len: int | None = None,
+        angle_bounds: tuple[float, float] | None = None,
     ):
         """:param name2volume: mapping from labelmap names to volumes. One of these volumes will be selected at reset.
         :param slice_shape: determines the shape of the 2D slices that will be used as observations
@@ -102,6 +125,17 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         # set at reset
         self._cur_labelmap_name: str | None = None
         self._cur_labelmap_volume: sitk.Image | None = None
+        
+        self.angle_bounds = angle_bounds
+
+    def unnormalize_rotation_translation(sel, action: np.ndarray) -> ManipulatorAction:
+        """Unnormalizes an array with values in the range [-1, 1] to the original range that is
+        consumed by :func:`slice_volume`.
+
+        :param action: normalized action with values in the range [-1, 1]
+        :return: unnormalized action that can be used with :func:`slice_volume`
+        """
+        return ManipulatorAction.from_array(action, self.angle_bounds)
 
     @property
     def cur_labelmap_name(self) -> str | None:
@@ -128,8 +162,8 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
 
     def _get_slice_from_action(self, action: np.ndarray) -> np.ndarray:
         # TODO: I'm not sure this is correct
-        unnormalize_rotation_translation(action)
-        sliced_volume = slice_volume(*action, volume=self.cur_labelmap_volume)
+        manipulator_action = unnormalize_rotation_translation(action)
+        sliced_volume = slice_volume(z_rotation=manipulator_action.z_rotation, volume=self.cur_labelmap_volume)
         sliced_img = sitk.GetArrayFromImage(sliced_volume)
         # TODO: sliced_img is 3D - why is that? Why do we take the zeroth channel?
         return sliced_img[:, 0, :]
@@ -162,3 +196,8 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             optimal_position=None,
             optimal_labelmap=None,
         )
+    
+    def step(self, action: np.ndarray | ManipulatorAction):
+        if isinstance(action, ManipulatorAction):
+            action = action.to_array(self.angle_bounds)
+        return super().step(action)

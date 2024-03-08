@@ -51,7 +51,7 @@ def slice_volume(
     :param volume: 3D volume to be sliced
     :return: the sliced volume.
     """
-    # Euler transformation
+    # Euler's transformation
     # Rotation is defined by three rotations around z1, x2, z2 axis
     th_z1 = np.deg2rad(z_rotation)
     th_x2 = np.deg2rad(x_rotation)

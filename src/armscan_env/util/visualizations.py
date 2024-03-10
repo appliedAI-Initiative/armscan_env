@@ -1,5 +1,6 @@
 import numpy as np
 from matplotlib import pyplot as plt
+from matplotlib.axes import Axes
 from matplotlib.image import AxesImage
 
 
@@ -10,7 +11,7 @@ def _show(
     col: int = 5,
     cmap: str | None = None,
     aspect: int = 6,
-) -> AxesImage:
+) -> AxesImage | Axes:
     """Function to display row of image slices
     :param slices: list of image slices
     :param start: starting slice number
@@ -40,7 +41,7 @@ def show_slices(
     col: int = 5,
     cmap: str | None = None,
     aspect: int = 6,
-) -> AxesImage:
+) -> AxesImage | Axes:
     """Function to display row of image slices
     :param data: 3D image data
     :param start: starting slice number
@@ -61,7 +62,11 @@ def show_slices(
     return _show(slices, start, lap, col, cmap, aspect)
 
 
-def show_cluster_centers(tissue_clusters: dict, slice: np.ndarray, ax: AxesImage = None) -> AxesImage:
+def show_cluster_centers(
+    tissue_clusters: dict,
+    slice: np.ndarray,
+    ax: Axes | None = None,
+) -> AxesImage | Axes:
     """Plot the centers of the clusters of all tissues in a slice
     :param tissue_clusters: dictionary of tissues and their clusters
     :param slice: image slice to cluster
@@ -85,7 +90,11 @@ def show_cluster_centers(tissue_clusters: dict, slice: np.ndarray, ax: AxesImage
     return ax
 
 
-def show_clusters(tissue_clusters: dict, slice: np.ndarray, ax: AxesImage = None) -> AxesImage:
+def show_clusters(
+    tissue_clusters: dict,
+    slice: np.ndarray,
+    ax: Axes | None = None,
+) -> AxesImage | Axes:
     """Plot the clusters of all tissues in a slice
     :param tissue_clusters: dictionary of tissues and their clusters
     :param slice: image slice to cluster
@@ -107,7 +116,11 @@ def show_clusters(tissue_clusters: dict, slice: np.ndarray, ax: AxesImage = None
     return ax
 
 
-def show_only_clusters(tissue_clusters: dict, slice: np.ndarray, ax: AxesImage = None) -> AxesImage:
+def show_only_clusters(
+    tissue_clusters: dict,
+    slice: np.ndarray,
+    ax: Axes | None = None,
+) -> AxesImage | Axes:
     """Plot only the clusters of all tissues in a slice
     :param tissue_clusters: dictionary of tissues and their clusters
     :param slice: image slice to cluster

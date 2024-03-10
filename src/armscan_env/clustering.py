@@ -86,7 +86,7 @@ def find_DBSCAN_clusters(
         return []
 
     # find label positions, upon which clustering wil be defined
-    label_positions = np.array(list(zip(*np.where(binary_mask))))
+    label_positions = np.array(list(zip(*np.where(binary_mask), strict=True)))
     # define clusterer
     clusterer = DBSCAN(eps=eps, min_samples=min_samples)
 

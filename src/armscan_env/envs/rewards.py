@@ -4,13 +4,17 @@ from typing import Any
 import numpy as np
 
 
-def anatomy_based_rwd(tissue_clusters: dict, n_landmarks: list = [5, 2, 1]) -> np.ndarray[Any, np.dtype[
-    np.floating[Any]]]:
+def anatomy_based_rwd(
+    tissue_clusters: dict,
+    n_landmarks: list | None = None,
+) -> np.ndarray[Any, np.dtype[np.floating[Any]]]:
     """Calculate the reward based on the presence and location of anatomical landmarks
     :param tissue_clusters: dictionary of tissues and their clusters
     :param n_landmarks: number of landmarks for each tissue
     :return: reward value.
     """
+    if n_landmarks is None:
+        n_landmarks = [5, 2, 1]
     print("####################################################")
     print("Calculating loss function:")
 

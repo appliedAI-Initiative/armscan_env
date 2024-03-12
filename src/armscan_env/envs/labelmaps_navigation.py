@@ -63,7 +63,7 @@ class LabelmapStateAction(StateAction):
 
 
 class LabelmapSliceObservation(ArrayObservation[LabelmapStateAction]):
-    def __init__(self, slice_shape: tuple[int, int]):
+    def __init__(self, slice_shape: tuple[int, int], render_mode: str | None = None):
         """:param slice_shape: slices will be cropped to this shape (we need a consistent observation space)."""
         self._slice_shape = slice_shape
         self._observation_space = gym.spaces.Box(low=0, high=1, shape=slice_shape)

@@ -39,15 +39,17 @@ def padding(original_array: np.ndarray) -> np.ndarray:
 
 
 def slice_volume(
-    z_rotation: float,
-    x_rotation: float,
-    translation: np.ndarray,
     volume: sitk.Image,
+    z_rotation: float | np.ndarray = 0.,
+    x_rotation: float | np.ndarray = 0.,
+    x_trans: float | np.ndarray = 0.,
+    y_trans: float | np.ndarray = 0.,
 ) -> sitk.Image:
     """Slice a 3D volume with arbitrary rotation and translation
     :param z_rotation: rotation around z-axis in degrees
     :param x_rotation: rotation around x-axis in degrees
-    :param translation: translation vector in 3D space
+    :param x_trans: translation along x-axis
+    :param y_trans: translation along y-axis
     :param volume: 3D volume to be sliced
     :return: the sliced volume.
     """
@@ -57,7 +59,6 @@ def slice_volume(
     th_x2 = np.deg2rad(x_rotation)
 
     o = np.array(volume.GetOrigin())
-    t = translation
 
     # transformation simplified at z2=0 since this rotation is never performed
     eul_tr = np.array(
@@ -66,15 +67,15 @@ def slice_volume(
                 np.cos(th_z1),
                 -np.sin(th_z1) * np.cos(th_x2),
                 np.sin(th_z1) * np.sin(th_x2),
-                o[0] + t[0],
+                o[0] + x_trans,
             ],
             [
                 np.sin(th_z1),
                 np.cos(th_z1) * np.cos(th_x2),
                 -np.cos(th_z1) * np.sin(th_x2),
-                o[1] + t[1],
+                o[1] + y_trans,
             ],
-            [0, np.sin(th_x2), np.cos(th_x2), o[2] + t[2]],
+            [0, np.sin(th_x2), np.cos(th_x2), o[2]],
             [0, 0, 0, 1],
         ],
     )

@@ -160,7 +160,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         # set at reset
         self._cur_labelmap_name: str | None = None
         self._cur_labelmap_volume: sitk.Image | None = None
-        
+
         self.angle_bounds = angle_bounds
         self.translation_bounds = translation_bounds
 

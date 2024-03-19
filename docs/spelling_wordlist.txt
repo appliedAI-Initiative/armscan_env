@@ -44,3 +44,4 @@ renderer
 eps
 cmap
 interpolator
+jshtml

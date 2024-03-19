@@ -40,10 +40,10 @@ def padding(original_array: np.ndarray) -> np.ndarray:
 
 def slice_volume(
     volume: sitk.Image,
-    z_rotation: float | np.ndarray = 0.,
-    x_rotation: float | np.ndarray = 0.,
-    x_trans: float | np.ndarray = 0.,
-    y_trans: float | np.ndarray = 0.,
+    z_rotation: float | np.ndarray = 0.0,
+    x_rotation: float | np.ndarray = 0.0,
+    x_trans: float | np.ndarray = 0.0,
+    y_trans: float | np.ndarray = 0.0,
 ) -> sitk.Image:
     """Slice a 3D volume with arbitrary rotation and translation
     :param z_rotation: rotation around z-axis in degrees
@@ -95,8 +95,12 @@ def slice_volume(
     # Define the size of the output image
     # height of the image plane: original z size divided by cosine of x-rotation
     h = int(abs(volume_size[2] // e3[2]))
+    if h > volume_size[2]:
+        h = volume_size[2]
     # width of the image plane: original x size divided by cosine of z-rotation
     w = int(abs(volume_size[0] // e1[0]))
+    if w > volume_size[1]:
+        w = volume_size[1]
 
     resampler.SetOutputDirection(direction.tolist())
     resampler.SetOutputOrigin(img_o.tolist())

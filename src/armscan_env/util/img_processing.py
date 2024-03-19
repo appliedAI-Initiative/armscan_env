@@ -41,7 +41,7 @@ def _validate_and_get_full_image_bbox(
     new_y_size, new_x_size = shape_hw
     if y_size < new_y_size or x_size < new_x_size:
         raise IncompatibleShapeError(
-            f"Center crop shape, {shape_hw}, larger than provided image of shape, {img_hw.shape}",
+            f"Center crop shape {shape_hw} larger than provided image of shape {img_hw.shape}",
         )
     return 0, 0, y_size, x_size
 

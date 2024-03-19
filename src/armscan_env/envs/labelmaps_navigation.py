@@ -1,51 +1,78 @@
+import logging
 from abc import ABC
+from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any, Self
 
 import gymnasium as gym
 import numpy as np
 import SimpleITK as sitk
+from armscan_env.clustering import DBSCAN_cluster_iter
 from armscan_env.envs.base import (
     ArrayObservation,
     ModularEnv,
     RewardMetric,
     StateAction,
     TerminationCriterion,
-    TStateAction,
 )
+from armscan_env.envs.rewards import anatomy_based_rwd
 from armscan_env.slicing import slice_volume
 from armscan_env.util.img_processing import crop_center
-from typing import Self
+from gymnasium.core import ObsType as TObs
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(kw_only=True)
 class ManipulatorAction:
-    z_rotation: float
-    
     rotation: np.ndarray
-    """Array of shape (2,) representing two angles"""
+    """Array of shape (2,) representing two angles in degrees. The angles will take values between -180 and 180 deg."""
     translation: np.ndarray
-    """Array of shape (2,) representing two translations"""
+    """Array of shape (2,) representing two translations TODO: extend description"""
 
-
-    def to_array(self, angle_bounds: Optional[tuple[float, float]] = None) -> np.ndarray:
+    def to_normalized_array(
+        self,
+        angle_bounds: tuple[float, float],
+        translation_bounds: tuple[float, float],
+    ) -> np.ndarray:
         """Converts the action to a 1D array. If angle_bounds is not None, the angles will be normalized to the range
-        [-1, 1] using the provided bounds."""
-        if angle_bounds is not None:
-            rotation = (self.rotation - angle_bounds[0]) / (angle_bounds[1] - angle_bounds[0]) * 2 - 1
-        else:
-            rotation = self.rotation
-        return np.concatenate([rotation, self.translation])
+        [-1, 1] using the provided bounds.
+        """
+        rotation = self.rotation / angle_bounds
+        translation = self.translation / translation_bounds
+
+        result = np.concatenate([rotation, translation])
+
+        if not (result >= -1).all() or not (result <= 1).all():
+            raise ValueError(
+                f"Angles or translations are out of bounds: "
+                f"{self.rotation=}, {self.translation=},"
+                f" {angle_bounds=}, {translation_bounds=}",
+            )
+        return result
 
     @classmethod
-    def from_array(cls, action: np.ndarray, angle_bounds: Optional[tuple[float, float]] = None) -> Self:
+    def from_normalized_array(
+        cls,
+        action: np.ndarray,
+        angle_bounds: tuple[float, float] | None = None,
+        translation_bounds: tuple[float, float] | None = None,
+    ) -> Self:
         """Converts a 1D array to a ManipulatorAction. If angle_bounds is not None, the angles will be unnormalized
-        using the provided bounds."""
-        if angle_bounds is not None:
-            rotation = (action[:2] + 1) / 2 * (angle_bounds[1] - angle_bounds[0]) + angle_bounds[0]
-        else:
-            rotation = action[:2]
-        return cls(rotation=rotation, translation=action[2:])
+        using the provided bounds.
+        """
+        if not (action.shape == (4,)):
+            raise ValueError(f"Action has wrong shape: {action.shape=}\nShould be (4,)")
+        if not (action >= -1).all() or not (action <= 1).all():
+            raise ValueError(
+                f"Action is not normalized: {action=}\nShould be in the range [-1, 1]",
+            )
 
+        rotation = action[:2] * angle_bounds
+        translation = action[2:] * translation_bounds
+        log.debug(f"Unnormalized action: {rotation=} deg, {translation=}")
+
+        return cls(rotation=rotation, translation=translation)
 
 
 @dataclass(kw_only=True)
@@ -82,9 +109,17 @@ class LabelmapSliceObservation(ArrayObservation[LabelmapStateAction]):
 
 
 class LabelmapClusteringBasedReward(RewardMetric[LabelmapStateAction]):
-    def compute_reward(self, state: TStateAction) -> float:
-        # TODO: implement with DBSCAN or similar
-        return 0.0
+    def __init__(
+        self,
+        tissues: dict[str, int],
+        n_landmarks: Sequence[int] = (5, 2, 1),
+    ):
+        self.tissues = tissues
+        self.n_landmarks = n_landmarks
+
+    def compute_reward(self, state: LabelmapStateAction) -> float:
+        clusters = DBSCAN_cluster_iter(self.tissues, state.labels_2d_slice)
+        return anatomy_based_rwd(tissue_clusters=clusters, n_landmarks=self.n_landmarks)
 
     @property
     def range(self) -> tuple[float, float]:
@@ -95,7 +130,6 @@ class LabelmapEnvTerminationCriterion(TerminationCriterion["LabelmapEnv"], ABC):
     pass
 
 
-
 class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
     _INITIAL_POS_ROTATION = np.zeros(4)
 
@@ -103,21 +137,22 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         self,
         name2volume: dict[str, sitk.Image],
         slice_shape: tuple[int, int],
-        reward_metric: RewardMetric[LabelmapStateAction] | None = None,
+        reward_metric: RewardMetric[LabelmapStateAction],
         termination_criterion: TerminationCriterion | None = None,
         max_episode_len: int | None = None,
-        angle_bounds: tuple[float, float] | None = None,
+        angle_bounds: tuple[float, float] = (180, 180),
+        translation_bounds: tuple[float, float] = (10, 10),
+        render_mode: str | None = None,
     ):
         """:param name2volume: mapping from labelmap names to volumes. One of these volumes will be selected at reset.
         :param slice_shape: determines the shape of the 2D slices that will be used as observations
-        :param reward_metric: if None, a default reward metric will be used
+        :param reward_metric: defines the reward metric that will be used, e.g. LabelmapClusteringBasedReward
         :param termination_criterion: if None, no termination criterion will be used
         :param max_episode_len:
         """
         if not name2volume:
             raise ValueError("name2volume must not be empty")
-        reward_metric = reward_metric or LabelmapClusteringBasedReward()
-        observation = LabelmapSliceObservation(slice_shape)
+        observation = LabelmapSliceObservation(slice_shape, render_mode)
         super().__init__(reward_metric, observation, termination_criterion, max_episode_len)
         self.name2volume = name2volume
         self._slice_shape = slice_shape
@@ -127,15 +162,20 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         self._cur_labelmap_volume: sitk.Image | None = None
         
         self.angle_bounds = angle_bounds
+        self.translation_bounds = translation_bounds
 
-    def unnormalize_rotation_translation(sel, action: np.ndarray) -> ManipulatorAction:
+    def unnormalize_rotation_translation(self, action: np.ndarray) -> ManipulatorAction:
         """Unnormalizes an array with values in the range [-1, 1] to the original range that is
         consumed by :func:`slice_volume`.
 
         :param action: normalized action with values in the range [-1, 1]
         :return: unnormalized action that can be used with :func:`slice_volume`
         """
-        return ManipulatorAction.from_array(action, self.angle_bounds)
+        return ManipulatorAction.from_normalized_array(
+            action,
+            self.angle_bounds,
+            self.translation_bounds,
+        )
 
     @property
     def cur_labelmap_name(self) -> str | None:
@@ -147,12 +187,11 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
 
     @property
     def action_space(self) -> gym.spaces.Space[np.ndarray]:
-        # TODO: correct bounds
         return gym.spaces.Box(
             low=-1,
             high=1.0,
-            shape=(5,),
-        )  # 2 rotations, 3 translations. Should be normalized
+            shape=(4,),
+        )  # 2 rotations, 2 translations. Should be normalized
 
     def close(self) -> None:
         super().close()
@@ -161,12 +200,15 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         self._cur_labelmap_volume = None
 
     def _get_slice_from_action(self, action: np.ndarray) -> np.ndarray:
-        # TODO: I'm not sure this is correct
-        manipulator_action = unnormalize_rotation_translation(action)
-        sliced_volume = slice_volume(z_rotation=manipulator_action.z_rotation, volume=self.cur_labelmap_volume)
-        sliced_img = sitk.GetArrayFromImage(sliced_volume)
-        # TODO: sliced_img is 3D - why is that? Why do we take the zeroth channel?
-        return sliced_img[:, 0, :]
+        manipulator_action = self.unnormalize_rotation_translation(action)
+        sliced_volume = slice_volume(
+            volume=self.cur_labelmap_volume,
+            z_rotation=manipulator_action.rotation[0],
+            x_rotation=manipulator_action.rotation[1],
+            x_trans=manipulator_action.translation[0],
+            y_trans=manipulator_action.translation[1],
+        )
+        return sitk.GetArrayFromImage(sliced_volume)[:, 0, :]
 
     def _get_initial_slice(self) -> np.ndarray:
         return self._get_slice_from_action(self._INITIAL_POS_ROTATION)
@@ -196,8 +238,11 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             optimal_position=None,
             optimal_labelmap=None,
         )
-    
-    def step(self, action: np.ndarray | ManipulatorAction):
+
+    def step(
+        self,
+        action: np.ndarray | ManipulatorAction,
+    ) -> tuple[TObs, float, bool, bool, dict[str, Any]]:
         if isinstance(action, ManipulatorAction):
-            action = action.to_array(self.angle_bounds)
+            action = action.to_normalized_array(self.angle_bounds, self.translation_bounds)
         return super().step(action)

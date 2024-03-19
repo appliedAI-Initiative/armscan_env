@@ -1,4 +1,5 @@
 import numpy as np
+from armscan_env.clustering import TissueClusters
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.image import AxesImage
@@ -63,7 +64,7 @@ def show_slices(
 
 
 def show_cluster_centers(
-    tissue_clusters: dict,
+    tissue_clusters: TissueClusters,
     slice: np.ndarray,
     ax: Axes | None = None,
 ) -> AxesImage | Axes:
@@ -76,11 +77,11 @@ def show_cluster_centers(
     ax = ax or plt.gca()
 
     for tissue in tissue_clusters:
-        for _label, data in enumerate(tissue_clusters[tissue]):
+        for _label, data in enumerate(tissue):
             # plot clusters with different colors
             ax.scatter(
-                data["center"][1],
-                data["center"][0],
+                data.center[1],
+                data.center[0],
                 color="red",
                 marker="*",
                 s=20,
@@ -91,7 +92,7 @@ def show_cluster_centers(
 
 
 def show_clusters(
-    tissue_clusters: dict,
+    tissue_clusters: TissueClusters,
     slice: np.ndarray,
     ax: Axes | None = None,
 ) -> AxesImage | Axes:
@@ -107,17 +108,16 @@ def show_clusters(
     cluster_labels = slice.copy()
 
     for tissue in tissue_clusters:
-        for label, data in enumerate(tissue_clusters[tissue]):
+        for label, data in enumerate(tissue):
             # plot clusters with different colors
-            cluster_labels[tuple(data["cluster"].T)] = (label + 1) * 10
-            ax.scatter(data["center"][1], data["center"][0], color="red", marker="*", s=20)
-
+            cluster_labels[tuple(np.array(data.cluster).T)] = (label + 1) * 10
+            ax.scatter(data.center[1], data.center[0], color="red", marker="*", s=20)
     ax.imshow(cluster_labels, aspect=6, origin="lower")
     return ax
 
 
 def show_only_clusters(
-    tissue_clusters: dict,
+    tissue_clusters: TissueClusters,
     slice: np.ndarray,
     ax: Axes | None = None,
 ) -> AxesImage | Axes:
@@ -133,15 +133,9 @@ def show_only_clusters(
     cluster_labels = np.ones_like(slice) * 0
 
     for tissue in tissue_clusters:
-        for label, data in enumerate(tissue_clusters[tissue]):
+        for label, data in enumerate(tissue):
             # plot clusters with different colors
-            cluster_labels[tuple(data["cluster"].T)] = (label + 1) * 10
-            ax.scatter(
-                data["center"][1],
-                data["center"][0],
-                color="red",
-                marker="*",
-                s=20,
-            )  # plot centers
+            cluster_labels[tuple(np.array(data.cluster).T)] = (label + 1) * 10
+            ax.scatter(data.center[1], data.center[0], color="red", marker="*", s=20)
     ax.imshow(cluster_labels, aspect=6, origin="lower")
     return ax

@@ -13,7 +13,8 @@ def _show(
     cmap: str | None = None,
     aspect: int = 6,
 ) -> AxesImage | Axes:
-    """Function to display row of image slices
+    """Function to display row of image slices.
+
     :param slices: list of image slices
     :param start: starting slice number
     :param lap: number of slices to skip
@@ -43,7 +44,8 @@ def show_slices(
     cmap: str | None = None,
     aspect: int = 6,
 ) -> AxesImage | Axes:
-    """Function to display row of image slices
+    """Function to display row of image slices.
+
     :param data: 3D image data
     :param start: starting slice number
     :param end: ending slice number
@@ -68,7 +70,8 @@ def show_cluster_centers(
     slice: np.ndarray,
     ax: Axes | None = None,
 ) -> AxesImage | Axes:
-    """Plot the centers of the clusters of all tissues in a slice
+    """Plot the centers of the clusters of all tissues in a slice.
+
     :param tissue_clusters: dictionary of tissues and their clusters
     :param slice: image slice to cluster
     :param ax: axis to plot on
@@ -96,7 +99,8 @@ def show_clusters(
     slice: np.ndarray,
     ax: Axes | None = None,
 ) -> AxesImage | Axes:
-    """Plot the clusters of all tissues in a slice
+    """Plot the clusters of all tissues in a slice.
+
     :param tissue_clusters: dictionary of tissues and their clusters
     :param slice: image slice to cluster
     :param ax: axis to plot on
@@ -121,7 +125,8 @@ def show_only_clusters(
     slice: np.ndarray,
     ax: Axes | None = None,
 ) -> AxesImage | Axes:
-    """Plot only the clusters of all tissues in a slice
+    """Plot only the clusters of all tissues in a slice.
+
     :param tissue_clusters: dictionary of tissues and their clusters
     :param slice: image slice to cluster
     :param ax: axis to plot on

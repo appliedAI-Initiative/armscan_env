@@ -12,7 +12,8 @@ def anatomy_based_rwd(
     tissue_clusters: TissueClusters,
     n_landmarks: Sequence[int] = (5, 2, 1),
 ) -> float:
-    """Calculate the reward based on the presence and location of anatomical landmarks
+    """Calculate the reward based on the presence and location of anatomical landmarks.
+
     :param tissue_clusters: dictionary of tissues and their clusters
     :param n_landmarks: number of landmarks for each tissue
     :return: reward value.

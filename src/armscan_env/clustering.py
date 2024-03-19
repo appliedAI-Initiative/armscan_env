@@ -27,7 +27,8 @@ class TissueClusters:
 
 
 def find_clusters(tissue_value: int, slice: np.ndarray) -> list[DataCluster]:
-    """Find clusters of a given tissue in a slice
+    """Find clusters of a given tissue in a slice using a center-symmetric mask.
+
     :param tissue_value: value of the tissue to cluster
     :param slice: image slice to cluster
     :return: list of clusters and their centers.
@@ -55,7 +56,8 @@ def find_clusters(tissue_value: int, slice: np.ndarray) -> list[DataCluster]:
 
 
 def cluster_iter(tissues: dict, slice: np.ndarray) -> TissueClusters:
-    """Find clusters of all tissues in a slice
+    """Find clusters of all tissues in a slice using a center-symmetric mask.
+
     :param tissues: dictionary of tissues and their values
     :param slice: image slice to cluster
     :return: dictionary of tissues and their clusters.
@@ -78,7 +80,8 @@ def find_DBSCAN_clusters(
     eps: float,
     min_samples: int,
 ) -> list[DataCluster]:
-    """Find clusters of a given tissue in a slice using DBSCAN
+    """Find clusters of a given tissue in a slice using DBSCAN.
+
     :param tissue_value: value of the tissue to cluster
     :param slice: image slice to cluster
     :param eps: The maximum distance between two samples for one to be considered as in the neighborhood of the other.
@@ -110,7 +113,8 @@ def find_DBSCAN_clusters(
 
 # TODO: set different parameters for each tissue from config
 def DBSCAN_cluster_iter(tissues: dict, slice: np.ndarray) -> TissueClusters:
-    """Find clusters of all tissues in a slice using DBSCAN
+    """Find clusters of all tissues in a slice using DBSCAN.
+
     :param tissues: dictionary of tissues and their values
     :param slice: image slice to cluster
     :return: dictionary of tissues and their clusters.

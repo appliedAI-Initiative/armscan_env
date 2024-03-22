@@ -149,6 +149,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         render_mode: str | None = None,
     ):
         """:param name2volume: mapping from labelmap names to volumes. One of these volumes will be selected at reset.
+
         :param slice_shape: determines the shape of the 2D slices that will be used as observations
         :param reward_metric: defines the reward metric that will be used, e.g. LabelmapClusteringBasedReward
         :param termination_criterion: if None, no termination criterion will be used

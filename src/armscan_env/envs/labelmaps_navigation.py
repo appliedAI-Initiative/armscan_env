@@ -2,12 +2,12 @@ import logging
 from abc import ABC
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 
 import gymnasium as gym
 import numpy as np
 import SimpleITK as sitk
-from armscan_env.clustering import DBSCAN_cluster_iter
+from armscan_env.clustering import TissueClusters
 from armscan_env.envs.base import (
     ArrayObservation,
     ModularEnv,
@@ -18,7 +18,10 @@ from armscan_env.envs.base import (
 from armscan_env.envs.rewards import anatomy_based_rwd
 from armscan_env.slicing import slice_volume
 from armscan_env.util.img_processing import crop_center
+from armscan_env.util.visualizations import show_clusters
 from gymnasium.core import ObsType as TObs
+from matplotlib import pyplot as plt
+from matplotlib.figure import Figure
 
 log = logging.getLogger(__name__)
 
@@ -26,9 +29,10 @@ log = logging.getLogger(__name__)
 @dataclass(kw_only=True)
 class ManipulatorAction:
     rotation: np.ndarray
-    """Array of shape (2,) representing two angles in degrees. The angles will take values between -180 and 180 deg."""
+    """Array of shape (2,) representing two angles in degrees (z_rot, x_rot). The angles will take values between
+    -180 and 180 deg."""
     translation: np.ndarray
-    """Array of shape (2,) representing two translations TODO: extend description"""
+    """Array of shape (2,) representing two translations (x_trans, y_trans). TODO: extend description."""
 
     def to_normalized_array(
         self,
@@ -78,7 +82,7 @@ class ManipulatorAction:
 @dataclass(kw_only=True)
 class LabelmapStateAction(StateAction):
     action: np.ndarray
-    """Array of shape (5,) representing two angles and two translations"""
+    """Array of shape (4,) representing two angles and two translations"""
     labels_2d_slice: np.ndarray
     """Two-dimensional slice of the labelmap, i.e., an array of shape (N, M) with integer values.
     Each integer represents a different label (bone, nerve, etc.)"""
@@ -111,14 +115,12 @@ class LabelmapSliceObservation(ArrayObservation[LabelmapStateAction]):
 class LabelmapClusteringBasedReward(RewardMetric[LabelmapStateAction]):
     def __init__(
         self,
-        tissues: dict[str, int],
         n_landmarks: Sequence[int] = (5, 2, 1),
     ):
-        self.tissues = tissues
         self.n_landmarks = n_landmarks
 
     def compute_reward(self, state: LabelmapStateAction) -> float:
-        clusters = DBSCAN_cluster_iter(self.tissues, state.labels_2d_slice)
+        clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
         return anatomy_based_rwd(tissue_clusters=clusters, n_landmarks=self.n_landmarks)
 
     @property

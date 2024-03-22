@@ -135,6 +135,8 @@ class LabelmapEnvTerminationCriterion(TerminationCriterion["LabelmapEnv"], ABC):
 class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
     _INITIAL_POS_ROTATION = np.zeros(4)
 
+    metadata: ClassVar[dict] = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
+
     def __init__(
         self,
         name2volume: dict[str, sitk.Image],
@@ -165,6 +167,9 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
 
         self.angle_bounds = angle_bounds
         self.translation_bounds = translation_bounds
+
+        assert render_mode is None or render_mode in self.metadata["render_modes"]
+        self.render_mode = render_mode
 
     def unnormalize_rotation_translation(self, action: np.ndarray) -> ManipulatorAction:
         """Unnormalizes an array with values in the range [-1, 1] to the original range that is
@@ -247,4 +252,82 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
     ) -> tuple[TObs, float, bool, bool, dict[str, Any]]:
         if isinstance(action, ManipulatorAction):
             action = action.to_normalized_array(self.angle_bounds, self.translation_bounds)
+        if self.render_mode == "human":
+            self.render()
         return super().step(action)
+
+    def reset(self, **kwargs: Any) -> tuple[TObs, dict[str, Any]]:
+        obs, info = super().reset(**kwargs)
+        if self.render_mode == "human":
+            self.render()
+        return obs, info
+
+    def render(self) -> Figure | None:
+        if self.render_mode is None:
+            assert self.spec is not None
+            gym.logger.warn(
+                "You are calling render method without specifying any render mode. "
+                "You can specify the render_mode at initialization, "
+                f'e.g. gym.make("{self.spec.id}", render_mode="rgb_array")',
+            )
+            return None
+
+        if self.render_mode == "human":
+            gym.logger.warn(
+                "Render mode 'human' has not been implemented yet."
+                "If you want to render the environment, please use 'rgb_array' mode.",
+            )
+            return None
+        else:  # mode in "rgb_array"
+            return self._plot_cur_state()
+
+    def _plot_cur_state(self, fig: plt.Figure | None = None) -> Figure:
+        """Plot the current state of the environment."""
+        if fig is None:
+            # Create a figure and a grid-spec with two rows and two columns
+            fig = plt.figure(constrained_layout=True, figsize=(8, 6))
+        gs = fig.add_gridspec(nrows=2, ncols=2)
+
+        # Add subplots
+        ax1 = fig.add_subplot(gs[:, 0])
+        ax2 = fig.add_subplot(gs[0, 1])
+        ax3 = fig.add_subplot(gs[1, 1])
+
+        assert self._cur_labelmap_volume is not None
+        volume = self._cur_labelmap_volume
+        o = volume.GetOrigin()
+        img_array = sitk.GetArrayFromImage(volume)[40, :, :]
+        action = ManipulatorAction.from_normalized_array(self.cur_state_action.action)
+        translation = action.translation
+        rotation = action.rotation
+
+        # Subplot 1: Image with dashed line
+        ax1.imshow(img_array)
+        x_dash = np.arange(img_array.shape[1])
+        b = volume.TransformPhysicalPointToIndex([o[0], o[1] + translation[1], o[2]])[1]
+        y_dash = x_dash * np.tan(np.deg2rad(rotation)) + b
+        ax1.set_title(f"Section {0}")
+        ax1.plot(x_dash, y_dash, linestyle="--", color="red")
+        ax1.set_title("Slice cut")
+
+        # ACTION
+        sliced_volume = slice_volume(
+            volume=volume,
+            z_rotation=rotation[0],
+            x_rotation=rotation[1],
+            x_trans=translation[0],
+            y_trans=translation[1],
+        )
+        sliced_img = sitk.GetArrayFromImage(sliced_volume)[:, 0, :]
+        ax2.imshow(sliced_img, origin="lower", aspect=6)
+
+        # OBSERVATION
+        clusters = TissueClusters.from_labelmap_slice(self.cur_state_action.labels_2d_slice)
+        show_clusters(clusters, sliced_img, ax3)
+
+        # REWARD
+        loss = anatomy_based_rwd(clusters)
+        plt.text(0, 0, f"Loss: {loss:.2f}", fontsize=12, color="red")
+
+        plt.close()
+        return fig

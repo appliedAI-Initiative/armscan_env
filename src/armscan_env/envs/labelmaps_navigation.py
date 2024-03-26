@@ -2,12 +2,13 @@ import logging
 from abc import ABC
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any, Self
+from typing import Any, ClassVar, Self
 
 import gymnasium as gym
 import numpy as np
 import SimpleITK as sitk
-from armscan_env.clustering import DBSCAN_cluster_iter
+from armscan_env.clustering import TissueClusters
+from armscan_env.constants import DEFAULT_SEED
 from armscan_env.envs.base import (
     ArrayObservation,
     ModularEnv,
@@ -18,7 +19,10 @@ from armscan_env.envs.base import (
 from armscan_env.envs.rewards import anatomy_based_rwd
 from armscan_env.slicing import slice_volume
 from armscan_env.util.img_processing import crop_center
+from armscan_env.util.visualizations import show_clusters
 from gymnasium.core import ObsType as TObs
+from matplotlib import pyplot as plt
+from matplotlib.figure import Figure
 
 log = logging.getLogger(__name__)
 
@@ -26,9 +30,10 @@ log = logging.getLogger(__name__)
 @dataclass(kw_only=True)
 class ManipulatorAction:
     rotation: np.ndarray
-    """Array of shape (2,) representing two angles in degrees. The angles will take values between -180 and 180 deg."""
+    """Array of shape (2,) representing two angles in degrees (z_rot, x_rot). The angles will take values between
+    -180 and 180 deg."""
     translation: np.ndarray
-    """Array of shape (2,) representing two translations TODO: extend description"""
+    """Array of shape (2,) representing two translations (x_trans, y_trans). TODO: extend description."""
 
     def to_normalized_array(
         self,
@@ -55,8 +60,8 @@ class ManipulatorAction:
     def from_normalized_array(
         cls,
         action: np.ndarray,
-        angle_bounds: tuple[float, float] | None = None,
-        translation_bounds: tuple[float, float] | None = None,
+        angle_bounds: tuple[float, float] | None,
+        translation_bounds: tuple[float, float] | None,
     ) -> Self:
         """Converts a 1D array to a ManipulatorAction. If angle_bounds is not None, the angles will be unnormalized
         using the provided bounds.
@@ -78,7 +83,7 @@ class ManipulatorAction:
 @dataclass(kw_only=True)
 class LabelmapStateAction(StateAction):
     action: np.ndarray
-    """Array of shape (5,) representing two angles and two translations"""
+    """Array of shape (4,) representing two angles and two translations"""
     labels_2d_slice: np.ndarray
     """Two-dimensional slice of the labelmap, i.e., an array of shape (N, M) with integer values.
     Each integer represents a different label (bone, nerve, etc.)"""
@@ -111,14 +116,12 @@ class LabelmapSliceObservation(ArrayObservation[LabelmapStateAction]):
 class LabelmapClusteringBasedReward(RewardMetric[LabelmapStateAction]):
     def __init__(
         self,
-        tissues: dict[str, int],
         n_landmarks: Sequence[int] = (5, 2, 1),
     ):
-        self.tissues = tissues
         self.n_landmarks = n_landmarks
 
     def compute_reward(self, state: LabelmapStateAction) -> float:
-        clusters = DBSCAN_cluster_iter(self.tissues, state.labels_2d_slice)
+        clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
         return anatomy_based_rwd(tissue_clusters=clusters, n_landmarks=self.n_landmarks)
 
     @property
@@ -133,6 +136,8 @@ class LabelmapEnvTerminationCriterion(TerminationCriterion["LabelmapEnv"], ABC):
 class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
     _INITIAL_POS_ROTATION = np.zeros(4)
 
+    metadata: ClassVar[dict] = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
+
     def __init__(
         self,
         name2volume: dict[str, sitk.Image],
@@ -145,6 +150,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         render_mode: str | None = None,
     ):
         """:param name2volume: mapping from labelmap names to volumes. One of these volumes will be selected at reset.
+
         :param slice_shape: determines the shape of the 2D slices that will be used as observations
         :param reward_metric: defines the reward metric that will be used, e.g. LabelmapClusteringBasedReward
         :param termination_criterion: if None, no termination criterion will be used
@@ -163,6 +169,11 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
 
         self.angle_bounds = angle_bounds
         self.translation_bounds = translation_bounds
+
+        assert render_mode is None or render_mode in self.metadata["render_modes"]
+        self.render_mode = render_mode
+        self.fig: Figure | None = None
+        self.axes: tuple[plt.Axes, plt.Axes, plt.Axes] | None = None
 
     def unnormalize_rotation_translation(self, action: np.ndarray) -> ManipulatorAction:
         """Unnormalizes an array with values in the range [-1, 1] to the original range that is
@@ -245,4 +256,93 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
     ) -> tuple[TObs, float, bool, bool, dict[str, Any]]:
         if isinstance(action, ManipulatorAction):
             action = action.to_normalized_array(self.angle_bounds, self.translation_bounds)
+        if self.render_mode == "human":
+            self.render()
         return super().step(action)
+
+    def reset(self, seed: int | None = DEFAULT_SEED, **kwargs: Any) -> tuple[TObs, dict[str, Any]]:
+        obs, info = super().reset(seed=seed, **kwargs)
+        if self.render_mode == "human":
+            self.render()
+        return obs, info
+
+    def render(self) -> plt.Figure | None:
+        if self.fig is None or self.axes is None:
+            self._create_figure()
+
+        if self.render_mode is None:
+            assert self.spec is not None
+            gym.logger.warn(
+                "You are calling render method without specifying any render mode. "
+                "You can specify the render_mode at initialization, "
+                f'e.g. gym.make("{self.spec.id}", render_mode="rgb_array")',
+            )
+            return None
+
+        if self.render_mode == "human":
+            gym.logger.warn(
+                "Render mode 'human' has not been implemented yet."
+                "If you want to render the environment, please use 'rgb_array' mode.",
+            )
+            return None
+        else:  # mode in "rgb_array"
+            return self._plot_cur_state()
+
+    def _create_figure(self) -> None:
+        self.fig = plt.figure(constrained_layout=True, figsize=(9, 6))
+        gs = self.fig.add_gridspec(nrows=2, ncols=2)
+        # Add subplots
+        ax2 = self.fig.add_subplot(gs[0, 1])
+        ax3 = self.fig.add_subplot(gs[1, 1])
+        ax1 = self.fig.add_subplot(gs[:, 0])
+        self.axes = (ax1, ax2, ax3)
+
+    def _plot_cur_state(self) -> plt.Figure | None:
+        """Plot the current state of the environment."""
+        if self.fig is None and self.axes is None:
+            gym.logger.warn("No figure or axes have been created. Creating them now.")
+            self._create_figure()
+
+        fig = self.fig
+        assert self.axes is not None and len(self.axes) == 3
+        ax1, ax2, ax3 = self.axes
+
+        assert self._cur_labelmap_volume is not None
+        volume = self._cur_labelmap_volume
+        o = volume.GetOrigin()
+        img_array = sitk.GetArrayFromImage(volume)[40, :, :]
+        action = self.unnormalize_rotation_translation(self.cur_state_action.action)
+        translation = action.translation
+        rotation = action.rotation
+
+        # Subplot 1: Image with dashed line
+        ax1.imshow(img_array)
+        x_dash = np.arange(img_array.shape[1])
+        b = volume.TransformPhysicalPointToIndex([o[0], o[1] + translation[1], o[2]])[1]
+        y_dash = np.tan(np.deg2rad(rotation[0])) * x_dash + b
+        y_dash = np.clip(y_dash, 0, img_array.shape[0] - 1)
+        ax1.set_title(f"Section {0}")
+        ax1.plot(x_dash, y_dash, linestyle="--", color="red")
+        ax1.set_title("Slice cut")
+
+        # ACTION
+        sliced_volume = slice_volume(
+            volume=volume,
+            z_rotation=rotation[0],
+            x_rotation=rotation[1],
+            x_trans=translation[0],
+            y_trans=translation[1],
+        )
+        sliced_img = sitk.GetArrayFromImage(sliced_volume)[:, 0, :]
+        ax2.imshow(sliced_img, origin="lower", aspect=6)
+
+        # OBSERVATION
+        clusters = TissueClusters.from_labelmap_slice(self.cur_state_action.labels_2d_slice)
+        show_clusters(clusters, sliced_img, ax3)
+
+        # REWARD
+        loss = anatomy_based_rwd(clusters)
+        ax3.text(0, 0, f"Loss: {loss:.2f}", fontsize=12, color="red")
+
+        plt.close()
+        return fig

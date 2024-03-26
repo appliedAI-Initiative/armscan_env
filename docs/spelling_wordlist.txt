@@ -44,3 +44,6 @@ renderer
 eps
 cmap
 interpolator
+initialised
+rgb
+ansi

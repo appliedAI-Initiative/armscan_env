@@ -1,13 +1,30 @@
 import logging
-from collections.abc import Iterator
 from dataclasses import dataclass
-from typing import Any
+from enum import Enum
+from typing import Any, Self
 
 import numpy as np
 from scipy.ndimage import label
 from sklearn.cluster import DBSCAN
 
 log = logging.getLogger(__name__)
+
+
+class TissueLabel(Enum):
+    BONES = 1
+    TENDONS = 2
+    ULNAR = 3
+
+    def find_DBSCAN_clusters(self, labelmap_slice: np.ndarray) -> list["DataCluster"]:
+        match self:
+            case TissueLabel.BONES:
+                return find_DBSCAN_clusters(self, labelmap_slice, eps=4.1, min_samples=46)
+            case TissueLabel.TENDONS:
+                return find_DBSCAN_clusters(self, labelmap_slice, eps=4.1, min_samples=46)
+            case TissueLabel.ULNAR:
+                return find_DBSCAN_clusters(self, labelmap_slice, eps=2.5, min_samples=18)
+            case _:
+                raise ValueError(f"Unknown tissue label: {self}")
 
 
 @dataclass(kw_only=True)
@@ -22,8 +39,28 @@ class TissueClusters:
     tendons: list[DataCluster]
     ulnar: list[DataCluster]
 
-    def __iter__(self) -> Iterator[list[DataCluster]]:
-        return iter([self.bones, self.tendons, self.ulnar])
+    def get_cluster_for_label(self, label: TissueLabel) -> list[DataCluster]:
+        match label:
+            case TissueLabel.BONES:
+                return self.bones
+            case TissueLabel.TENDONS:
+                return self.tendons
+            case TissueLabel.ULNAR:
+                return self.ulnar
+            case _:
+                raise ValueError(f"Unknown tissue label: {label}")
+
+    @classmethod
+    def from_labelmap_slice(cls, labelmap_slice: np.ndarray) -> Self:
+        """Find clusters of all tissues in a slice using DBSCAN.
+
+        :param labelmap_slice: image slice to cluster
+        """
+        bones_clusters = TissueLabel.BONES.find_DBSCAN_clusters(labelmap_slice)
+        tendons_clusters = TissueLabel.TENDONS.find_DBSCAN_clusters(labelmap_slice)
+        ulnar_clusters = TissueLabel.ULNAR.find_DBSCAN_clusters(labelmap_slice)
+
+        return cls(bones=bones_clusters, tendons=tendons_clusters, ulnar=ulnar_clusters)
 
 
 def find_clusters(tissue_value: int, slice: np.ndarray) -> list[DataCluster]:
@@ -75,20 +112,21 @@ def cluster_iter(tissues: dict, slice: np.ndarray) -> TissueClusters:
 
 
 def find_DBSCAN_clusters(
-    tissue_value: int,
-    slice: np.ndarray,
+    tissue_label: TissueLabel,
+    labelmap_slice: np.ndarray,
     eps: float,
     min_samples: int,
 ) -> list[DataCluster]:
     """Find clusters of a given tissue in a slice using DBSCAN.
 
-    :param tissue_value: value of the tissue to cluster
-    :param slice: image slice to cluster
+    :param label: value of the tissue to cluster
+    :param labelmap_slice: slice of a labelmap volume, i.e., a 2D array with integers
     :param eps: The maximum distance between two samples for one to be considered as in the neighborhood of the other.
     :param min_samples: The number of samples (or total weight) in a neighborhood for a point to be considered as a core point.
     :return: list of clusters and their centers.
     """
-    binary_mask = slice == tissue_value
+    label_value = tissue_label.value
+    binary_mask = labelmap_slice == label_value
     if np.all(binary_mask == 0):
         log.debug("No tissues to cluster with given value.")
         return []
@@ -109,18 +147,3 @@ def find_DBSCAN_clusters(
         cluster_list.append(DataCluster(cluster=label_to_pos_array, center=cluster_centers))
 
     return cluster_list
-
-
-# TODO: set different parameters for each tissue from config
-def DBSCAN_cluster_iter(tissues: dict, slice: np.ndarray) -> TissueClusters:
-    """Find clusters of all tissues in a slice using DBSCAN.
-
-    :param tissues: dictionary of tissues and their values
-    :param slice: image slice to cluster
-    :return: dictionary of tissues and their clusters.
-    """
-    bones = find_DBSCAN_clusters(tissues["bones"], slice, eps=4.1, min_samples=46)
-    tendons = find_DBSCAN_clusters(tissues["tendons"], slice, eps=4.1, min_samples=46)
-    ulnar = find_DBSCAN_clusters(tissues["ulnar"], slice, eps=2.5, min_samples=18)
-
-    return TissueClusters(bones=bones, tendons=tendons, ulnar=ulnar)

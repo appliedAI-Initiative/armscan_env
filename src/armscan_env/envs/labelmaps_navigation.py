@@ -60,8 +60,8 @@ class ManipulatorAction:
     def from_normalized_array(
         cls,
         action: np.ndarray,
-        angle_bounds: tuple[float, float] | None = None,
-        translation_bounds: tuple[float, float] | None = None,
+        angle_bounds: tuple[float, float] | None,
+        translation_bounds: tuple[float, float] | None,
     ) -> Self:
         """Converts a 1D array to a ManipulatorAction. If angle_bounds is not None, the angles will be unnormalized
         using the provided bounds.
@@ -172,6 +172,8 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
 
         assert render_mode is None or render_mode in self.metadata["render_modes"]
         self.render_mode = render_mode
+        self.fig: Figure | None = None
+        self.axes: tuple[plt.Axes, plt.Axes, plt.Axes] | None = None
 
     def unnormalize_rotation_translation(self, action: np.ndarray) -> ManipulatorAction:
         """Unnormalizes an array with values in the range [-1, 1] to the original range that is
@@ -264,7 +266,10 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             self.render()
         return obs, info
 
-    def render(self) -> Figure | None:
+    def render(self) -> plt.Figure | None:
+        if self.fig is None or self.axes is None:
+            self._create_figure()
+
         if self.render_mode is None:
             assert self.spec is not None
             gym.logger.warn(
@@ -283,23 +288,30 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         else:  # mode in "rgb_array"
             return self._plot_cur_state()
 
-    def _plot_cur_state(self, fig: plt.Figure | None = None) -> Figure:
-        """Plot the current state of the environment."""
-        if fig is None:
-            # Create a figure and a grid-spec with two rows and two columns
-            fig = plt.figure(constrained_layout=True, figsize=(8, 6))
-        gs = fig.add_gridspec(nrows=2, ncols=2)
-
+    def _create_figure(self) -> None:
+        self.fig = plt.figure(constrained_layout=True, figsize=(9, 6))
+        gs = self.fig.add_gridspec(nrows=2, ncols=2)
         # Add subplots
-        ax1 = fig.add_subplot(gs[:, 0])
-        ax2 = fig.add_subplot(gs[0, 1])
-        ax3 = fig.add_subplot(gs[1, 1])
+        ax2 = self.fig.add_subplot(gs[0, 1])
+        ax3 = self.fig.add_subplot(gs[1, 1])
+        ax1 = self.fig.add_subplot(gs[:, 0])
+        self.axes = (ax1, ax2, ax3)
+
+    def _plot_cur_state(self) -> plt.Figure | None:
+        """Plot the current state of the environment."""
+        if self.fig is None and self.axes is None:
+            gym.logger.warn("No figure or axes have been created. Creating them now.")
+            self._create_figure()
+
+        fig = self.fig
+        assert self.axes is not None and len(self.axes) == 3
+        ax1, ax2, ax3 = self.axes
 
         assert self._cur_labelmap_volume is not None
         volume = self._cur_labelmap_volume
         o = volume.GetOrigin()
         img_array = sitk.GetArrayFromImage(volume)[40, :, :]
-        action = ManipulatorAction.from_normalized_array(self.cur_state_action.action)
+        action = self.unnormalize_rotation_translation(self.cur_state_action.action)
         translation = action.translation
         rotation = action.rotation
 
@@ -307,7 +319,8 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         ax1.imshow(img_array)
         x_dash = np.arange(img_array.shape[1])
         b = volume.TransformPhysicalPointToIndex([o[0], o[1] + translation[1], o[2]])[1]
-        y_dash = x_dash * np.tan(np.deg2rad(rotation)) + b
+        y_dash = np.tan(np.deg2rad(rotation[0])) * x_dash + b
+        y_dash = np.clip(y_dash, 0, img_array.shape[0] - 1)
         ax1.set_title(f"Section {0}")
         ax1.plot(x_dash, y_dash, linestyle="--", color="red")
         ax1.set_title("Slice cut")
@@ -329,7 +342,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
 
         # REWARD
         loss = anatomy_based_rwd(clusters)
-        plt.text(0, 0, f"Loss: {loss:.2f}", fontsize=12, color="red")
+        ax3.text(0, 0, f"Loss: {loss:.2f}", fontsize=12, color="red")
 
         plt.close()
         return fig

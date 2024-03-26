@@ -8,6 +8,7 @@ import gymnasium as gym
 import numpy as np
 import SimpleITK as sitk
 from armscan_env.clustering import TissueClusters
+from armscan_env.constants import DEFAULT_SEED
 from armscan_env.envs.base import (
     ArrayObservation,
     ModularEnv,
@@ -257,8 +258,8 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             self.render()
         return super().step(action)
 
-    def reset(self, **kwargs: Any) -> tuple[TObs, dict[str, Any]]:
-        obs, info = super().reset(**kwargs)
+    def reset(self, seed: int | None = DEFAULT_SEED, **kwargs: Any) -> tuple[TObs, dict[str, Any]]:
+        obs, info = super().reset(seed=seed, **kwargs)
         if self.render_mode == "human":
             self.render()
         return obs, info

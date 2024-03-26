@@ -207,8 +207,8 @@ class ModularEnv(gym.Env[TObs, TAction], Generic[TStateAction, TAction, TObs], A
         self._cur_state_action = self.compute_next_state(action)
         self._update_observation_reward_termination()
 
-    def reset(self, **kwargs: Any) -> tuple[TObs, dict[str, Any]]:
-        super().reset(**kwargs)
+    def reset(self, seed: int | None = None, **kwargs: Any) -> tuple[TObs, dict[str, Any]]:
+        super().reset(seed=seed, **kwargs)
         self._cur_state_action = self.sample_initial_state()
         self._is_closed = False
         self._cur_episode_len = 1

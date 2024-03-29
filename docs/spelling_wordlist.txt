@@ -47,3 +47,4 @@ interpolator
 initialised
 rgb
 ansi
+voxel

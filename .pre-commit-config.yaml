@@ -50,3 +50,7 @@ repos:
         name: mypy-nb
         entry: poetry run nbqa mypy
         language: system
+      - id: clean-nbs
+        name: clean-nbs
+        entry: poetry run python docs/nbstripout.py
+        language: system

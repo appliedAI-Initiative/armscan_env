@@ -1,5 +1,5 @@
 import numpy as np
-from armscan_env.clustering import TissueClusters
+from armscan_env.clustering import TissueClusters, TissueLabel
 from matplotlib import pyplot as plt
 from matplotlib.axes import Axes
 from matplotlib.image import AxesImage
@@ -79,18 +79,12 @@ def show_cluster_centers(
     """
     ax = ax or plt.gca()
 
-    for tissue in tissue_clusters:
-        for _label, data in enumerate(tissue):
+    for tissue_label in TissueLabel:
+        for data in tissue_clusters.get_cluster_for_label(tissue_label):
             # plot clusters with different colors
-            ax.scatter(
-                data.center[1],
-                data.center[0],
-                color="red",
-                marker="*",
-                s=20,
-            )  # plot centers
+            ax.scatter(data.center[1], data.center[0], color="red", marker="*", s=20)
 
-    ax.imshow(slice, aspect=6, origin="lower")
+        ax.imshow(slice, aspect=6, origin="lower")
     return ax
 
 
@@ -111,8 +105,8 @@ def show_clusters(
     # create an empty array for cluster labels
     cluster_labels = slice.copy()
 
-    for tissue in tissue_clusters:
-        for label, data in enumerate(tissue):
+    for tissue in TissueLabel:
+        for label, data in enumerate(tissue_clusters.get_cluster_for_label(tissue)):
             # plot clusters with different colors
             cluster_labels[tuple(np.array(data.cluster).T)] = (label + 1) * 10
             ax.scatter(data.center[1], data.center[0], color="red", marker="*", s=20)
@@ -137,8 +131,8 @@ def show_only_clusters(
     # create an empty array for cluster labels
     cluster_labels = np.ones_like(slice) * 0
 
-    for tissue in tissue_clusters:
-        for label, data in enumerate(tissue):
+    for tissue in TissueLabel:
+        for label, data in enumerate(tissue_clusters.get_cluster_for_label(tissue)):
             # plot clusters with different colors
             cluster_labels[tuple(np.array(data.cluster).T)] = (label + 1) * 10
             ax.scatter(data.center[1], data.center[0], color="red", marker="*", s=20)

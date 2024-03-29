@@ -71,9 +71,11 @@ def anatomy_based_rwd(
     # Loss is bounded between 0 and 1
     loss = (1 / 3) * (0.1 * landmark_loss + (1 / 3) * missing_landmark_loss + location_loss)
 
-    log.debug(f"Landmark loss: {landmark_loss}")
-    log.debug(f"Missing landmark loss: {missing_landmark_loss}")
-    log.debug(f"Location loss: {location_loss}")
-    log.debug(f"Total loss: {loss}")
+    log.debug(
+        f"Landmark loss: {landmark_loss}\n"
+        f"Missing landmark loss: {missing_landmark_loss}\n"
+        f"Location loss: {location_loss}\n"
+        f"Total loss: {loss}",
+    )
 
     return loss

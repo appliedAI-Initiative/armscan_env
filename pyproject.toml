@@ -20,6 +20,7 @@ exclude = ["test/*", "examples/*", "docs/*"]
 python = "^3.11"
 accsr = "^0.4.6"
 celluloid = "^0.2.0"
+ffmpeg = "^1.4"
 gymnasium = "^0.29.1"
 matplotlib = "^3.8.3"
 numpy = "^1.26.4"

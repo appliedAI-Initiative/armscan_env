@@ -101,8 +101,8 @@ def slice_volume(
         h = volume_size[2]
     # width of the image plane: original x size divided by cosine of z-rotation
     w = int(abs(volume_size[0] // e1[0]))
-    if w > volume_size[0]:
-        w = volume_size[0]
+    if w > volume_size[1]:
+        w = volume_size[1]
 
     resampler.SetOutputDirection(direction.tolist())
     resampler.SetOutputOrigin(img_o.tolist())

@@ -69,7 +69,9 @@ def anatomy_based_rwd(
             log.debug("Ulnar center not where expected")
 
     # Loss is bounded between 0 and 1
-    loss = (1 / 3) * (0.1 * landmark_loss + (1 / 3) * missing_landmark_loss + location_loss)
+    loss = (1 / 3) * (
+        (1 / sum(n_landmarks)) * landmark_loss + (1 / 3) * missing_landmark_loss + location_loss
+    )
 
     log.debug(
         f"Landmark loss: {landmark_loss}\n"

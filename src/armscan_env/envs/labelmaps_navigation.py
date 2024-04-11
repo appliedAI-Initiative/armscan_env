@@ -345,22 +345,21 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         rotation = action.rotation
 
         # Subplot 1: from the top
-        ix = 40
-        ax1.imshow(img_array[ix, :, :])
+        iz = volume.GetSize()[2] // 2
+        ax1.imshow(img_array[iz, :, :])
         x_dash = np.arange(img_array.shape[2])
         b = volume.TransformPhysicalPointToIndex([o[0], o[1] + translation[1], o[2]])[1]
-        b_x = b + np.tan(np.deg2rad(rotation[1])) * ix
+        b_x = b + np.tan(np.deg2rad(rotation[1])) * iz
         y_dash = np.tan(np.deg2rad(rotation[0])) * x_dash + b_x
         y_dash = np.clip(y_dash, 0, img_array.shape[1] - 1)
         ax1.plot(x_dash, y_dash, linestyle="--", color="red")
         ax1.set_title("Slice cut")
 
         # Subplot 2: from the side
-        iz = 265
-        ax2.imshow(img_array[:, :, iz].T, aspect=0.24)
+        ix = volume.GetSize()[0] // 2
+        ax2.imshow(img_array[:, :, ix].T, aspect=0.24)
         z_dash = np.arange(img_array.shape[0])
-        # y has x size and b value
-        b_z = b + np.tan(np.deg2rad(rotation[0])) * iz
+        b_z = b + np.tan(np.deg2rad(rotation[0])) * ix
         y_dash_2 = np.tan(np.deg2rad(rotation[1])) * z_dash + b_z
         y_dash_2 = np.clip(y_dash_2, 0, img_array.shape[1] - 1)
         ax2.plot(z_dash, y_dash_2, linestyle="--", color="red")

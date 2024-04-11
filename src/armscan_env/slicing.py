@@ -41,6 +41,7 @@ def padding(original_array: np.ndarray) -> np.ndarray:
 
 def slice_volume(
     volume: sitk.Image,
+    slice_shape: tuple[int, int],
     z_rotation: float | np.ndarray = 0.0,
     x_rotation: float | np.ndarray = 0.0,
     x_trans: float | np.ndarray = 0.0,
@@ -53,6 +54,7 @@ def slice_volume(
     :param x_trans: translation along x-axis
     :param y_trans: translation along y-axis
     :param volume: 3D volume to be sliced
+    :param slice_shape: shape of the output slice
     :return: the sliced volume.
     """
     # Euler's transformation
@@ -92,17 +94,9 @@ def slice_volume(
 
     resampler = sitk.ResampleImageFilter()
     spacing = volume.GetSpacing()
-    volume_size = volume.GetSize()
 
-    # Define the size of the output image
-    # height of the image plane: original z size divided by cosine of x-rotation
-    h = int(abs(volume_size[2] // e3[2]))
-    if h > volume_size[2]:
-        h = volume_size[2]
-    # width of the image plane: original x size divided by cosine of z-rotation
-    w = int(abs(volume_size[0] // e1[0]))
-    if w > volume_size[1]:
-        w = volume_size[1]
+    w = slice_shape[0]
+    h = slice_shape[1]
 
     resampler.SetOutputDirection(direction.tolist())
     resampler.SetOutputOrigin(img_o.tolist())

@@ -13,6 +13,7 @@ from armscan_env.constants import DEFAULT_SEED
 from armscan_env.envs.base import (
     ArrayObservation,
     ModularEnv,
+    Observation,
     RewardMetric,
     StateAction,
     TerminationCriterion,
@@ -43,16 +44,16 @@ class ManipulatorAction:
     def to_normalized_array(
         self,
         angle_bounds: tuple[float, float],
-        translation_bounds: tuple[float, float] | None,
+        translation_bounds: tuple[float | None, float | None],
     ) -> np.ndarray:
         """Converts the action to a 1D array. If angle_bounds is not None, the angles will be normalized to the range
         [-1, 1] using the provided bounds.
         """
-        if translation_bounds is None:
+        if None in translation_bounds:
             raise ValueError("Translation bounds must not be None,this should not happen.")
         rotation = self.rotation / angle_bounds
         # normalize translation to [-1, 1]: 0 -> -1, translation_bounds -> 1
-        translation = 2 * self.translation / translation_bounds - 1
+        translation = 2 * self.translation / translation_bounds - 1  # type: ignore
 
         result = np.concatenate([rotation, translation])
 
@@ -69,7 +70,7 @@ class ManipulatorAction:
         cls,
         action: np.ndarray,
         angle_bounds: tuple[float, float],
-        translation_bounds: tuple[float, float],
+        translation_bounds: tuple[float | None, float | None],
     ) -> Self:
         """Converts a 1D array to a ManipulatorAction. If angle_bounds is not None, the angles will be unnormalized
         using the provided bounds.
@@ -80,13 +81,15 @@ class ManipulatorAction:
             raise ValueError(
                 f"Action is not normalized: {action=}\nShould be in the range [-1, 1]",
             )
+        if None in translation_bounds:
+            raise ValueError("Translation bounds must not be None,this should not happen.")
 
         rotation = action[:2] * angle_bounds
         # unnormalize translation: -1 -> 0, 1 -> translation_bounds
         translation = (action[2:] + 1) / 2 * translation_bounds
         log.debug(f"Unnormalized action: {rotation=} deg, {translation=}")
 
-        return cls(rotation=rotation, translation=translation)
+        return cls(rotation=rotation, translation=translation)  # type: ignore
 
 
 @dataclass(kw_only=True)
@@ -150,20 +153,24 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
     def __init__(
         self,
         name2volume: dict[str, sitk.Image],
-        slice_shape: tuple[int, int],
         reward_metric: RewardMetric[LabelmapStateAction],
+        observation: Observation[LabelmapStateAction, Any],
+        slice_shape: tuple[int, int] | None = None,
         termination_criterion: TerminationCriterion | None = None,
         max_episode_len: int | None = None,
         angle_bounds: tuple[float, float] = (180, 180),
-        translation_bounds: tuple[float, float] | None = None,
+        translation_bounds: tuple[float | None, float | None] = (None, None),
         render_mode: Literal["plt", "animation"] | None = None,
     ):
         """:param name2volume: mapping from labelmap names to volumes. One of these volumes will be selected at reset.
-
-        :param slice_shape: determines the shape of the 2D slices that will be used as observations
         :param reward_metric: defines the reward metric that will be used, e.g. LabelmapClusteringBasedReward
+        :param observation: defines the observation space, e.g. LabelmapSliceObservation
+        :param slice_shape: determines the shape of the 2D slices that will be used as observations
         :param termination_criterion: if None, no termination criterion will be used
-        :param max_episode_len:
+        :param max_episode_len: maximum number of steps in an episode
+        :param angle_bounds: bounds for the rotation angles in degrees
+        :param translation_bounds: bounds for the translation in mm
+        :param render_mode: determines how the environment will be rendered. Allowed values: "plt", "animation"
         """
         if not name2volume:
             raise ValueError("name2volume must not be empty")
@@ -172,7 +179,6 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
                 f"Unknown {render_mode=}. Allowed values: {self.metadata['render_modes']}",
             )
 
-        observation = LabelmapSliceObservation(slice_shape, render_mode)
         super().__init__(reward_metric, observation, termination_criterion, max_episode_len)
         self.name2volume = name2volume
         self._slice_shape = slice_shape
@@ -181,6 +187,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         self._cur_labelmap_name: str | None = None
         self._cur_labelmap_volume: sitk.Image | None = None
 
+        self.user_defined_bounds = angle_bounds, translation_bounds
         self.angle_bounds = angle_bounds
         self.translation_bounds = translation_bounds
 
@@ -230,6 +237,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         manipulator_action = self.unnormalize_rotation_translation(action)
         sliced_volume = slice_volume(
             volume=self.cur_labelmap_volume,
+            slice_shape=self._slice_shape,
             z_rotation=manipulator_action.rotation[0],
             x_rotation=manipulator_action.rotation[1],
             x_trans=manipulator_action.translation[0],
@@ -257,7 +265,10 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         sampled_image_name = np.random.choice(list(self.name2volume.keys()))
         self._cur_labelmap_name = sampled_image_name
         self._cur_labelmap_volume = self.name2volume[sampled_image_name]
-        self.get_translation_bounds()
+        if None in self.translation_bounds:
+            self.compute_translation_bounds()
+        if self._slice_shape is None:
+            self.compute_slice_shape(volume=self.cur_labelmap_volume)
         # Alternatively, select a random slice
         initial_slice = self._get_initial_slice()
         return LabelmapStateAction(
@@ -267,6 +278,13 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             optimal_labelmap=None,
         )
 
+    def compute_slice_shape(self, volume: sitk.Image | None) -> None:
+        """Compute the shape of the 2D slices that will be used as observations."""
+        if volume is None:
+            raise RuntimeError("The labelmap volume must not be None, did you call reset?")
+        size = volume.GetSize()
+        self._slice_shape = (size[0], size[2])
+
     def compute_translation_bounds(self) -> None:
         """Compute the translation bounds from the volume size."""
         if self.cur_labelmap_volume is None:
@@ -274,11 +292,13 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         volume = self.cur_labelmap_volume
         size = volume.GetSize()
         spacing = volume.GetSpacing()
-        self.translation_bounds = size[0] * spacing[0], size[1] * spacing[1]
+        bounds: list[float | None] = list(self.translation_bounds)
+        for i in range(2):
+            if bounds[i] is None:
+                bounds[i] = size[i] * spacing[i]
+        self.translation_bounds = tuple(bounds)  # type: ignore
 
-    def get_translation_bounds(self) -> tuple[float, float] | None:
-        if self.translation_bounds is None:
-            self.compute_translation_bounds()
+    def get_translation_bounds(self) -> tuple[float | None, float | None]:
         return self.translation_bounds
 
     def step(
@@ -294,12 +314,15 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         seed: int | None = DEFAULT_SEED,
         reset_render: bool = True,
         reset_translation_bounds: bool = True,
+        reset_slice_shape: bool = False,
         **kwargs: Any,
     ) -> tuple[TObs, dict[str, Any]]:
         if reset_render:
             self.reset_render()
         if reset_translation_bounds:
-            self.translation_bounds = None
+            self.translation_bounds = self.user_defined_bounds[1]
+        if reset_slice_shape:
+            self._slice_shape = None
         obs, info = super().reset(seed=seed, **kwargs)
         return obs, info
 

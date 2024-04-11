@@ -373,8 +373,8 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             "Slice taken at position:\n"
             f"y: {translation[1]:.2f} mm,\n"
             f"x: {translation[0]:.2f} mm,\n"
-            f"rot_z: {rotation[0]:.2f} mm,\n"
-            f"rot_x: {rotation[1]:.2f} mm"
+            f"rot_z: {rotation[0]:.2f} deg,\n"
+            f"rot_x: {rotation[1]:.2f} deg"
         )
         ax4.text(0.5, 0.5, txt, ha="center", va="center")
         ax4.axis("off")

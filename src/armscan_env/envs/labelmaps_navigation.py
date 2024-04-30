@@ -3,12 +3,12 @@ from abc import ABC
 from collections.abc import Sequence
 from copy import copy
 from dataclasses import dataclass
-from typing import Any, ClassVar, Literal, Self
+from typing import Any, ClassVar, Literal, Self, cast
 
 import gymnasium as gym
 import numpy as np
 import SimpleITK as sitk
-from armscan_env.clustering import TissueClusters
+from armscan_env.clustering import TissueClusters, TissueLabel
 from armscan_env.constants import DEFAULT_SEED
 from armscan_env.envs.base import (
     ArrayObservation,
@@ -17,6 +17,7 @@ from armscan_env.envs.base import (
     RewardMetric,
     StateAction,
     TerminationCriterion,
+    TStateAction,
 )
 from armscan_env.envs.rewards import anatomy_based_rwd
 from armscan_env.slicing import slice_volume
@@ -107,22 +108,79 @@ class LabelmapStateAction(StateAction):
 
 
 class LabelmapSliceObservation(ArrayObservation[LabelmapStateAction]):
-    def __init__(self, slice_shape: tuple[int, int], render_mode: str | None = None):
+    def __init__(self, slice_shape: tuple[int, int]):
         """:param slice_shape: slices will be cropped to this shape (we need a consistent observation space)."""
         self._slice_shape = slice_shape
         self._observation_space = gym.spaces.Box(low=0, high=1, shape=slice_shape)
+
+    def compute_observation(self, state: LabelmapStateAction) -> np.ndarray:
+        return self.compute_from_slice(state.labels_2d_slice)
+
+    def compute_from_slice(self, labels_2d_slice: np.ndarray) -> np.ndarray:
+        return crop_center(labels_2d_slice, self.slice_shape)
 
     @property
     def slice_shape(self) -> tuple[int, int]:
         return self._slice_shape
 
-    def compute_observation(self, state: LabelmapStateAction) -> np.ndarray:
-        return crop_center(state.labels_2d_slice, self.slice_shape)
+    @property
+    def observation_space(self) -> gym.spaces.Space[np.ndarray]:
+        """Boolean 2-d array representing segregated labelmap slice."""
+        return self._observation_space
+
+
+class LabelmapSliceAsChannelsObservation(ArrayObservation[LabelmapStateAction]):
+    def __init__(self, slice_shape: tuple[int, int]):
+        """:param slice_shape: slices will be cropped to this shape (we need a consistent observation space)."""
+        self._slice_shape = slice_shape
+        self._output_shape = (len(TissueLabel),) + slice_shape  # noqa
+        self._observation_space = gym.spaces.Box(low=0, high=1, shape=self._output_shape)
+
+    def compute_observation(
+        self,
+        state: LabelmapStateAction,
+    ) -> np.ndarray[bool, np.dtype[np.bool_]]:
+        return self.compute_from_slice(state.labels_2d_slice)
+
+    def compute_from_slice(
+        self,
+        labels_2d_slice: np.ndarray,
+    ) -> np.ndarray[bool, np.dtype[np.bool_]]:
+        cropped_slice = crop_center(labels_2d_slice, self.slice_shape)
+        result = cast(
+            np.ndarray[bool, np.dtype[np.bool_]],
+            np.zeros(self.output_shape, dtype=np.bool_),
+        )
+        for channel, label in enumerate(TissueLabel):
+            result[channel] = cropped_slice == label.value
+        return result
+
+    @property
+    def slice_shape(self) -> tuple[int, int]:
+        return self._slice_shape
+
+    @property
+    def output_shape(self) -> tuple[int, int, int]:
+        return self._output_shape
 
     @property
     def observation_space(self) -> gym.spaces.Space[np.ndarray]:
         """Boolean 2-d array representing segregated labelmap slice."""
         return self._observation_space
+
+
+class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
+    def compute_observation(self, state: TStateAction) -> np.ndarray:
+        tissue_clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
+        return self.cluster_characteristics_array(tissue_cluster=tissue_clusters)
+
+    @staticmethod
+    def cluster_characteristics_array(tissue_cluster: TissueClusters) -> np.ndarray:
+        characteristics_array = np.zeros((3, 2))
+        characteristics_array[0, 0] = len(tissue_cluster.bones)
+        characteristics_array[1, 0] = len(tissue_cluster.tendons)
+        characteristics_array[2, 0] = len(tissue_cluster.ulnar)
+        return characteristics_array
 
 
 class LabelmapClusteringBasedReward(RewardMetric[LabelmapStateAction]):
@@ -161,6 +219,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         angle_bounds: tuple[float, float] = (180, 180),
         translation_bounds: tuple[float | None, float | None] = (None, None),
         render_mode: Literal["plt", "animation"] | None = None,
+        seed: int | None = DEFAULT_SEED,
     ):
         """:param name2volume: mapping from labelmap names to volumes. One of these volumes will be selected at reset.
         :param reward_metric: defines the reward metric that will be used, e.g. LabelmapClusteringBasedReward
@@ -169,7 +228,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         :param termination_criterion: if None, no termination criterion will be used
         :param max_episode_len: maximum number of steps in an episode
         :param angle_bounds: bounds for the rotation angles in degrees
-        :param translation_bounds: bounds for the translation in mm
+        :param translation_bounds: bounds for the translation in mm. If None, the bound will be computed from the volume size.
         :param render_mode: determines how the environment will be rendered. Allowed values: "plt", "animation"
         """
         if not name2volume:
@@ -182,6 +241,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         super().__init__(reward_metric, observation, termination_criterion, max_episode_len)
         self.name2volume = name2volume
         self._slice_shape = slice_shape
+        self._seed = seed
 
         # set at reset
         self._cur_labelmap_name: str | None = None
@@ -203,8 +263,6 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         :param action: normalized action with values in the range [-1, 1]
         :return: unnormalized action that can be used with :func:`slice_volume`
         """
-        if self.translation_bounds is None:
-            raise ValueError("Translation bounds must not be None,this should not happen.")
         return ManipulatorAction.from_normalized_array(
             action,
             self.angle_bounds,
@@ -292,7 +350,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         volume = self.cur_labelmap_volume
         size = volume.GetSize()
         spacing = volume.GetSpacing()
-        bounds: list[float | None] = list(self.translation_bounds)
+        bounds = list(self.translation_bounds)
         for i in range(2):
             if bounds[i] is None:
                 bounds[i] = size[i] * spacing[i]
@@ -311,7 +369,6 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
 
     def reset(
         self,
-        seed: int | None = DEFAULT_SEED,
         reset_render: bool = True,
         reset_translation_bounds: bool = True,
         reset_slice_shape: bool = False,
@@ -323,7 +380,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             self.translation_bounds = self.user_defined_bounds[1]
         if reset_slice_shape:
             self._slice_shape = None
-        obs, info = super().reset(seed=seed, **kwargs)
+        obs, info = super().reset(seed=self._seed, **kwargs)
         return obs, info
 
     def render(self) -> plt.Figure | Camera | None:

@@ -48,3 +48,5 @@ initialised
 rgb
 ansi
 voxel
+convolutional
+preprocessed

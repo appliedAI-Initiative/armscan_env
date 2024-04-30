@@ -1,7 +1,7 @@
 # armscan_env
 
 Welcome to the armscan_env library!
-You can find a full documentation with tutorials, notebooks and API in the GitHub page of the project:
+You can find a full documentation with tutorials, notebooks and API in the GitHub-Pages of the project:
 [armscan_env](https://appliedai-initiative.github.io/armscan_env/)
 
 

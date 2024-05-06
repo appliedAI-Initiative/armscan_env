@@ -200,7 +200,8 @@ class LabelmapClusteringBasedReward(RewardMetric[LabelmapStateAction]):
 
 
 class LabelmapEnvTerminationCriterion(TerminationCriterion["LabelmapEnv"], ABC):
-    pass
+    def should_terminate(self, env: "LabelmapEnv") -> bool:
+        return env.cur_reward == 0.0
 
 
 class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
@@ -211,10 +212,10 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
     def __init__(
         self,
         name2volume: dict[str, sitk.Image],
-        reward_metric: RewardMetric[LabelmapStateAction],
         observation: Observation[LabelmapStateAction, Any],
+        reward_metric: RewardMetric[LabelmapStateAction] = LabelmapClusteringBasedReward(),
+        termination_criterion: TerminationCriterion | None = LabelmapEnvTerminationCriterion(),
         slice_shape: tuple[int, int] | None = None,
-        termination_criterion: TerminationCriterion | None = None,
         max_episode_len: int | None = None,
         angle_bounds: tuple[float, float] = (180, 180),
         translation_bounds: tuple[float | None, float | None] = (None, None),

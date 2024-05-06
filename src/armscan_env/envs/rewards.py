@@ -80,4 +80,4 @@ def anatomy_based_rwd(
         f"Total loss: {loss}",
     )
 
-    return loss
+    return -loss

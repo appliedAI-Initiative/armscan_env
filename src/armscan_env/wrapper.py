@@ -6,7 +6,12 @@ from typing import Any, Literal
 import numpy as np
 import SimpleITK as sitk
 from armscan_env.envs.base import Observation, RewardMetric, TerminationCriterion
-from armscan_env.envs.labelmaps_navigation import LabelmapEnv, LabelmapStateAction
+from armscan_env.envs.labelmaps_navigation import (
+    LabelmapClusteringBasedReward,
+    LabelmapEnv,
+    LabelmapEnvTerminationCriterion,
+    LabelmapStateAction,
+)
 from armscan_env.network import DQN, layer_init
 from gymnasium import Env
 from tianshou.highlevel.env import (
@@ -26,10 +31,10 @@ class ArmscanEnvFactory(EnvFactory):
     def __init__(
         self,
         name2volume: dict[str, sitk.Image],
-        reward_metric: RewardMetric[LabelmapStateAction],
         observation: Observation[LabelmapStateAction, Any],
+        reward_metric: RewardMetric[LabelmapStateAction] = LabelmapClusteringBasedReward(),
+        termination_criterion: TerminationCriterion | None = LabelmapEnvTerminationCriterion(),
         slice_shape: tuple[int, int] | None = None,
-        termination_criterion: TerminationCriterion | None = None,
         max_episode_len: int | None = None,
         angle_bounds: tuple[float, float] = (180, 180),
         translation_bounds: tuple[float | None, float | None] = (None, None),

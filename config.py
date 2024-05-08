@@ -8,8 +8,7 @@ useful to read the source code docu in accsr). In essence:
 
     1.  The `__Configuration` class is where you put your custom configuration getters. Since here it inherits from
         `DefaultDataConfiguration`, you already have some default getter methods like `data_raw`, `data_processed`
-        and so on. You will probably want to extend this
-        class with more getters for your config needs.
+        and so on. You will probably want to extend this class with more getters for your config needs.
         A typical example that is often used at appliedAI is to include a remote storage config
         (for which there is also support in accsr), with
         .. code-block:: python
@@ -22,13 +21,22 @@ useful to read the source code docu in accsr). In essence:
         reload it from disc, unless specifically desired. Essentially, it is a singleton provider. Most likely you
         will not need to adjust it and just use the `get_config` function to retrieve your config.
 """
-
+import os
 
 from accsr.config import ConfigProviderBase, DefaultDataConfiguration
 
 
 class __Configuration(DefaultDataConfiguration):
-    pass
+    def get_labels_path(self, labelmap_number: int) -> str:
+        labelmap_path = os.path.join(self.get_labels_basedir(), f"{labelmap_number:05d}_labels.nii")
+        return self._adjusted_path(labelmap_path, relative=False, check_existence=True)
+
+    def get_labels_basedir(self) -> str:
+        return self._adjusted_path(
+            os.path.join(self.data, "labels"),
+            relative=False,
+            check_existence=True,
+        )
 
 
 class ConfigProvider(ConfigProviderBase[__Configuration]):

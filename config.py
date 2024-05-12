@@ -38,6 +38,17 @@ class __Configuration(DefaultDataConfiguration):
             check_existence=True,
         )
 
+    def get_mri_path(self, mri_number: int) -> str:
+        mri_path = os.path.join(self.get_mri_basedir(), f"{mri_number:05d}.nii")
+        return self._adjusted_path(mri_path, relative=False, check_existence=True)
+
+    def get_mri_basedir(self) -> str:
+        return self._adjusted_path(
+            os.path.join(self.data, "mri"),
+            relative=False,
+            check_existence=True,
+        )
+
 
 class ConfigProvider(ConfigProviderBase[__Configuration]):
     pass

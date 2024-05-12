@@ -92,6 +92,7 @@ def show_clusters(
     tissue_clusters: TissueClusters,
     slice: np.ndarray,
     ax: Axes | None = None,
+    aspect: int = 6,
 ) -> AxesImage | Axes:
     """Plot the clusters of all tissues in a slice.
 
@@ -110,7 +111,7 @@ def show_clusters(
             # plot clusters with different colors
             cluster_labels[tuple(np.array(data.cluster).T)] = (label + 1) * 10
             ax.scatter(data.center[1], data.center[0], color="red", marker="*", s=20)
-    ax.imshow(cluster_labels, aspect=6, origin="lower")
+    ax.imshow(cluster_labels, aspect=aspect, origin="lower")
     return ax
 
 

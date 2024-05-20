@@ -30,6 +30,7 @@ from matplotlib import pyplot as plt
 from matplotlib.animation import ArtistAnimation
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+from numpy import bool_, dtype, ndarray
 
 log = logging.getLogger(__name__)
 
@@ -100,6 +101,8 @@ class LabelmapStateAction(StateAction):
     labels_2d_slice: np.ndarray
     """Two-dimensional slice of the labelmap, i.e., an array of shape (N, M) with integer values.
     Each integer represents a different label (bone, nerve, etc.)"""
+    reward: float | None = None
+    """The reward for the current state-action pair. May be None if the reward is not known."""
     optimal_position: np.ndarray | None = None
     """The optimal position for the 2D slice, i.e., the position where the slice is the most informative.
     May be None if the optimal position is not known."""
@@ -133,34 +136,36 @@ class LabelmapSliceAsChannelsObservation(ArrayObservation[LabelmapStateAction]):
     def __init__(self, slice_shape: tuple[int, int]):
         """:param slice_shape: slices will be cropped to this shape (we need a consistent observation space)."""
         self._slice_shape = slice_shape
-        self._output_shape = (len(TissueLabel),) + slice_shape  # noqa
+        self._output_shape = (len(TissueLabel),) + slice_shape + (4, 1)  # noqa
         self._observation_space = gym.spaces.Box(low=0, high=1, shape=self._output_shape)
 
     def compute_observation(
         self,
         state: LabelmapStateAction,
-    ) -> np.ndarray[bool, np.dtype[np.bool_]]:
-        return self.compute_from_slice(state.labels_2d_slice)
+    ) -> tuple[ndarray[bool, dtype[bool_ | bool_]], ndarray, float | None]:
+        return self.compute_from_slice(state.labels_2d_slice, state.action, state.reward)
 
     def compute_from_slice(
         self,
         labels_2d_slice: np.ndarray,
-    ) -> np.ndarray[bool, np.dtype[np.bool_]]:
+        action: np.ndarray,
+        reward: float | None,
+    ) -> tuple[ndarray[bool, dtype[bool_]], ndarray, float | None]:
         cropped_slice = crop_center(labels_2d_slice, self.slice_shape)
         result = cast(
             np.ndarray[bool, np.dtype[np.bool_]],
-            np.zeros(self.output_shape, dtype=np.bool_),
+            np.zeros(self.output_shape[:3], dtype=np.bool_),
         )
         for channel, label in enumerate(TissueLabel):
             result[channel] = cropped_slice == label.value
-        return result
+        return result, action, reward
 
     @property
     def slice_shape(self) -> tuple[int, int]:
         return self._slice_shape
 
     @property
-    def output_shape(self) -> tuple[int, int, int]:
+    def output_shape(self) -> tuple[int, int, int, int, int]:
         return self._output_shape
 
     @property
@@ -284,7 +289,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             low=-1,
             high=1.0,
             shape=(4,),
-        )  # 2 rotations, 2 translations. Should be normalized
+        )  # 2 rotations, 2 translations.
 
     def close(self) -> None:
         super().close()
@@ -312,6 +317,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         return LabelmapStateAction(
             action=action,
             labels_2d_slice=new_slice,
+            reward=self.reward_metric.compute_reward(self.cur_state_action),
             optimal_position=self.cur_state_action.optimal_position,
             optimal_labelmap=self.cur_state_action.optimal_labelmap,
         )

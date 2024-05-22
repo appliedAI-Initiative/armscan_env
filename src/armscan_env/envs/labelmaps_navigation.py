@@ -205,8 +205,14 @@ class LabelmapClusteringBasedReward(RewardMetric[LabelmapStateAction]):
 
 
 class LabelmapEnvTerminationCriterion(TerminationCriterion["LabelmapEnv"], ABC):
+    def __init__(
+        self,
+        reward_satisfaction: float = 0.1,
+    ):
+        self.reward_satisfaction = reward_satisfaction
+
     def should_terminate(self, env: "LabelmapEnv") -> bool:
-        return env.cur_reward == 0.0
+        return env.cur_reward < self.reward_satisfaction
 
 
 class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):

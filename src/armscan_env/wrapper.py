@@ -12,8 +12,9 @@ from armscan_env.envs.labelmaps_navigation import (
     LabelmapEnvTerminationCriterion,
     LabelmapStateAction,
 )
-from armscan_env.network import DQN, layer_init
-from gymnasium import Env
+from armscan_env.network import DQN_MLP_Concat
+from gymnasium import ActionWrapper, Env, spaces
+from gymnasium.wrappers import FrameStack
 from tianshou.highlevel.env import (
     EnvFactory,
     Environments,
@@ -43,6 +44,9 @@ class ArmscanEnvFactory(EnvFactory):
         render_mode_watch: Literal["plt", "animation"] | None = "animation",
         venv_type: VectorEnvType = VectorEnvType.SUBPROC_SHARED_MEM,
         seed: int | None = None,
+        n_stack: int = 1,
+        project_to_x_translation: bool = False,
+        remove_rotation_actions: bool = False,
         **make_kwargs: Any,
     ) -> None:
         """:param name2volume: the gymnasium task/environment identifier
@@ -67,6 +71,9 @@ class ArmscanEnvFactory(EnvFactory):
             EnvMode.WATCH: render_mode_watch,
         }
         self.seed = seed
+        self.n_stack = n_stack
+        self.project_to_x_translation = project_to_x_translation
+        self.remove_rotation_actions = remove_rotation_actions
         self.make_kwargs = make_kwargs
 
     def _create_kwargs(self) -> dict:
@@ -82,7 +89,7 @@ class ArmscanEnvFactory(EnvFactory):
         :param mode: the mode
         :return: an environment
         """
-        return LabelmapEnv(
+        env = LabelmapEnv(
             name2volume=self.name2volume,
             observation=self.observation,
             slice_shape=self.slice_shape,
@@ -93,6 +100,62 @@ class ArmscanEnvFactory(EnvFactory):
             translation_bounds=self.translation_bounds,
             render_mode=self.render_modes.get(mode),
             seed=self.seed,
+        )
+
+        if self.project_to_x_translation:
+            env = ProjectToXTranslationEnvWrapper(env)
+
+        if self.remove_rotation_actions:
+            env = RemoveRotationActionsEnvWrapper(env)
+
+        if self.n_stack > 1:
+            env = FrameStack(env, self.n_stack)
+
+        return env
+
+
+class ProjectToXTranslationEnvWrapper(ActionWrapper):
+    def __init__(self, env: Env) -> None:
+        super().__init__(env)
+
+    def action(
+        self,
+        action: spaces.Space[np.ndarray],
+    ) -> spaces.Dict:
+        """Project the action to the x translation removing the y translation."""
+        return spaces.Dict(
+            {
+                "angle": spaces.Box(
+                    low=-1,
+                    high=1.0,
+                    shape=(2,),
+                ),
+                "x_translation": spaces.Box(
+                    low=-1,
+                    high=1.0,
+                    shape=(1,),
+                ),
+            },
+        )
+
+
+class RemoveRotationActionsEnvWrapper(ActionWrapper):
+    def __init__(self, env: Env) -> None:
+        super().__init__(env)
+
+    def action(
+        self,
+        action: spaces.Space[np.ndarray],
+    ) -> spaces.Dict:
+        """Remove the rotation actions."""
+        return spaces.Dict(
+            {
+                "translation": spaces.Box(
+                    low=-1,
+                    high=1.0,
+                    shape=(2,),
+                ),
+            },
         )
 
 
@@ -106,18 +169,19 @@ class ActorFactoryArmscanDQN(ActorFactory):
         self.features_only = features_only
 
     def create_module(self, envs: Environments, device: TDevice) -> ActorProb:
-        c, h, w = envs.get_observation_shape()  # type: ignore  # only right shape is a sequence of length 3
+        c, h, w, a, r = envs.get_observation_shape()  # type: ignore  # only right shape is a sequence of length 3
         action_shape = envs.get_action_shape()
         if isinstance(action_shape, np.int64):
             action_shape = int(action_shape)
-        net: DQN = DQN(
+        net = DQN_MLP_Concat(
             c=c,
             h=h,
             w=w,
+            a=a,
+            r=r,
             action_shape=action_shape,
             device=device,
             features_only=self.features_only,
             output_dim_added_layer=self.output_dim_added_layer,
-            layer_init=layer_init,
         )
         return ActorProb(net, envs.get_action_shape(), device=device).to(device)

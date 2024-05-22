@@ -24,18 +24,16 @@ volume_2 = sitk.ReadImage(path_to_labels_2)
 log_name = os.path.join("ppo", str(ExperimentConfig.seed), datetime_tag())
 experiment_config = ExperimentConfig()
 
-
 # %%
 sampling_config = SamplingConfig(
-    num_epochs=10,
+    num_epochs=100,
     step_per_epoch=1000,
     batch_size=25,
-    num_train_envs=10,
+    num_train_envs=-1,
     num_test_envs=10,
-    buffer_size=1000,
-    step_per_collect=100,
-    repeat_per_collect=4,
-    # replay_buffer_stack_num=4,  # ToDo: consider stacking for reasoning about temporal dependencies
+    buffer_size=100000,
+    step_per_collect=1000,
+    replay_buffer_stack_num=4,
 )
 
 volume_size = volume_1.GetSize()
@@ -74,7 +72,6 @@ builder = (
     .with_critic_factory_use_actor()
 )
 experiment = builder.build()
-
 
 # %%
 experiment.run(log_name)

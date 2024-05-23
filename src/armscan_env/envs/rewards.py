@@ -4,6 +4,8 @@ from collections.abc import Sequence
 
 import numpy as np
 from armscan_env.clustering import TissueClusters
+from armscan_env.envs.base import RewardMetric
+from armscan_env.envs.state_action import LabelmapStateAction
 
 log = logging.getLogger(__name__)
 
@@ -81,3 +83,19 @@ def anatomy_based_rwd(
     )
 
     return -loss
+
+
+class LabelmapClusteringBasedReward(RewardMetric[LabelmapStateAction]):
+    def __init__(
+        self,
+        n_landmarks: Sequence[int] = (5, 2, 1),
+    ):
+        self.n_landmarks = n_landmarks
+
+    def compute_reward(self, state: LabelmapStateAction) -> float:
+        clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
+        return anatomy_based_rwd(tissue_clusters=clusters, n_landmarks=self.n_landmarks)
+
+    @property
+    def range(self) -> tuple[float, float]:
+        return -1.0, 0.0

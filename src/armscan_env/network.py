@@ -1,10 +1,17 @@
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, Generic
 
 import numpy as np
 import torch
-from tianshou.utils.net.common import NetBase
+from tianshou.data.batch import BatchProtocol
+from tianshou.utils.net.common import TRecurrentState
 from torch import nn
+
+
+class LabelmapsObsBatchProtocol(BatchProtocol):
+    channelled_labelmap_BCWH: np.ndarray
+    action_BA: np.ndarray
+    reward_B: np.ndarray
 
 
 def layer_init(layer: nn.Module, std: float = np.sqrt(2), bias_const: float = 0.0) -> nn.Module:
@@ -14,7 +21,7 @@ def layer_init(layer: nn.Module, std: float = np.sqrt(2), bias_const: float = 0.
     return layer
 
 
-class DQN_MLP_Concat(NetBase):
+class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
     """Reference: Human-level control through deep reinforcement learning.
 
     For advanced usage (how to customize the network), please refer to
@@ -94,16 +101,22 @@ class DQN_MLP_Concat(NetBase):
 
     def forward(
         self,
-        obs: np.ndarray | torch.Tensor,
+        obs: LabelmapsObsBatchProtocol,
         state: Any | None = None,
         info: dict[str, Any] | None = None,
-        **kwargs: Any,
     ) -> tuple[torch.Tensor, Any]:
         r"""Mapping: s -> Q(s, \*)."""
-        image = torch.as_tensor(obs[3:], device=self.device, dtype=torch.float32)
-        image_output = self.cnn(image)
+        channeled_labelmap = torch.as_tensor(
+            obs.channelled_labelmap_BCWH,
+            device=self.device,
+            dtype=torch.float32,
+        )
+        image_output = self.cnn(channeled_labelmap)
 
-        action_reward = torch.concat([obs[3], obs[4]], dim=0)
+        action_reward = torch.concat(
+            [torch.from_numpy(obs.action_BA), torch.from_numpy(obs.reward_B)],
+            dim=0,
+        )
         action_reward_output = self.mlp(action_reward)
 
         concat = torch.cat([image_output, action_reward_output], dim=0)

@@ -7,11 +7,11 @@ import numpy as np
 import SimpleITK as sitk
 from armscan_env.envs.base import Observation, RewardMetric, TerminationCriterion
 from armscan_env.envs.labelmaps_navigation import (
-    LabelmapClusteringBasedReward,
     LabelmapEnv,
     LabelmapEnvTerminationCriterion,
-    LabelmapStateAction,
 )
+from armscan_env.envs.rewards import LabelmapClusteringBasedReward
+from armscan_env.envs.state_action import LabelmapStateAction
 from armscan_env.network import DQN_MLP_Concat
 from gymnasium import ActionWrapper, Env, spaces
 from gymnasium.wrappers import FrameStack

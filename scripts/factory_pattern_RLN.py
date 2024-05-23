@@ -3,9 +3,7 @@
 import os
 
 import SimpleITK as sitk
-from armscan_env.envs.labelmaps_navigation import (
-    LabelmapSliceAsChannelsObservation,
-)
+from armscan_env.envs.observations import LabelmapSliceAsChannelsObservation
 from armscan_env.wrapper import ActorFactoryArmscanDQN, ArmscanEnvFactory
 from tianshou.highlevel.config import SamplingConfig
 from tianshou.highlevel.experiment import ExperimentConfig, PPOExperimentBuilder
@@ -39,7 +37,11 @@ sampling_config = SamplingConfig(
 volume_size = volume_1.GetSize()
 env_factory = ArmscanEnvFactory(
     name2volume={"1": volume_1, "2": volume_2},
-    observation=LabelmapSliceAsChannelsObservation(slice_shape=(volume_size[2], volume_size[0])),
+    observation=LabelmapSliceAsChannelsObservation(
+        slice_shape=(volume_size[2], volume_size[0]),
+        action_shape=(4,),
+        reward_shape=(1,),
+    ),
     slice_shape=(volume_size[0], volume_size[2]),
     max_episode_len=5000,
     angle_bounds=(90.0, 45.0),

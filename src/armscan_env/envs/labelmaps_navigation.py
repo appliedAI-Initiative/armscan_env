@@ -1,27 +1,22 @@
 import logging
 from abc import ABC
-from collections.abc import Sequence
 from copy import copy
-from dataclasses import dataclass
-from typing import Any, ClassVar, Literal, Self, cast
+from typing import Any, ClassVar, Literal
 
 import gymnasium as gym
 import numpy as np
 import SimpleITK as sitk
-from armscan_env.clustering import TissueClusters, TissueLabel
+from armscan_env.clustering import TissueClusters
 from armscan_env.constants import DEFAULT_SEED
 from armscan_env.envs.base import (
-    ArrayObservation,
     ModularEnv,
     Observation,
     RewardMetric,
-    StateAction,
     TerminationCriterion,
-    TStateAction,
 )
-from armscan_env.envs.rewards import anatomy_based_rwd
+from armscan_env.envs.rewards import LabelmapClusteringBasedReward
+from armscan_env.envs.state_action import LabelmapStateAction, ManipulatorAction
 from armscan_env.slicing import slice_volume
-from armscan_env.util.img_processing import crop_center
 from armscan_env.util.visualizations import show_clusters
 from celluloid import Camera
 from gymnasium.core import ObsType as TObs
@@ -30,189 +25,19 @@ from matplotlib import pyplot as plt
 from matplotlib.animation import ArtistAnimation
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
-from numpy import bool_, dtype, ndarray
 
 log = logging.getLogger(__name__)
-
-
-@dataclass(kw_only=True)
-class ManipulatorAction:
-    rotation: np.ndarray
-    """Array of shape (2,) representing two angles in degrees (z_rot, x_rot). The angles will take values between
-    -180 and 180 deg."""
-    translation: np.ndarray
-    """Array of shape (2,) representing two translations (x_trans, y_trans) in mm."""
-
-    def to_normalized_array(
-        self,
-        angle_bounds: tuple[float, float],
-        translation_bounds: tuple[float | None, float | None],
-    ) -> np.ndarray:
-        """Converts the action to a 1D array. If angle_bounds is not None, the angles will be normalized to the range
-        [-1, 1] using the provided bounds.
-        """
-        if None in translation_bounds:
-            raise ValueError("Translation bounds must not be None,this should not happen.")
-        rotation = self.rotation / angle_bounds
-        # normalize translation to [-1, 1]: 0 -> -1, translation_bounds -> 1
-        translation = 2 * self.translation / translation_bounds - 1  # type: ignore
-
-        result = np.concatenate([rotation, translation])
-
-        if not (result >= -1).all() or not (result <= 1).all():
-            raise ValueError(
-                f"Angles or translations are out of bounds: "
-                f"{self.rotation=}, {self.translation=},"
-                f" {angle_bounds=}, {translation_bounds=}",
-            )
-        return result
-
-    @classmethod
-    def from_normalized_array(
-        cls,
-        action: np.ndarray,
-        angle_bounds: tuple[float, float],
-        translation_bounds: tuple[float | None, float | None],
-    ) -> Self:
-        """Converts a 1D array to a ManipulatorAction. If angle_bounds is not None, the angles will be unnormalized
-        using the provided bounds.
-        """
-        if not (action.shape == (4,)):
-            raise ValueError(f"Action has wrong shape: {action.shape=}\nShould be (4,)")
-        if not (action >= -1).all() or not (action <= 1).all():
-            raise ValueError(
-                f"Action is not normalized: {action=}\nShould be in the range [-1, 1]",
-            )
-        if None in translation_bounds:
-            raise ValueError("Translation bounds must not be None,this should not happen.")
-
-        rotation = action[:2] * angle_bounds
-        # unnormalize translation: -1 -> 0, 1 -> translation_bounds
-        translation = (action[2:] + 1) / 2 * translation_bounds
-        log.debug(f"Unnormalized action: {rotation=} deg, {translation=}")
-
-        return cls(rotation=rotation, translation=translation)  # type: ignore
-
-
-@dataclass(kw_only=True)
-class LabelmapStateAction(StateAction):
-    action: np.ndarray
-    """Array of shape (4,) representing two angles and two translations"""
-    labels_2d_slice: np.ndarray
-    """Two-dimensional slice of the labelmap, i.e., an array of shape (N, M) with integer values.
-    Each integer represents a different label (bone, nerve, etc.)"""
-    reward: float | None = None
-    """The reward for the current state-action pair. May be None if the reward is not known."""
-    optimal_position: np.ndarray | None = None
-    """The optimal position for the 2D slice, i.e., the position where the slice is the most informative.
-    May be None if the optimal position is not known."""
-    optimal_labelmap: np.ndarray | None = None
-    """The labelmap at the optimal position. May be None if the optimal position is not known."""
-
-
-class LabelmapSliceObservation(ArrayObservation[LabelmapStateAction]):
-    def __init__(self, slice_shape: tuple[int, int]):
-        """:param slice_shape: slices will be cropped to this shape (we need a consistent observation space)."""
-        self._slice_shape = slice_shape
-        self._observation_space = gym.spaces.Box(low=0, high=1, shape=slice_shape)
-
-    def compute_observation(self, state: LabelmapStateAction) -> np.ndarray:
-        return self.compute_from_slice(state.labels_2d_slice)
-
-    def compute_from_slice(self, labels_2d_slice: np.ndarray) -> np.ndarray:
-        return crop_center(labels_2d_slice, self.slice_shape)
-
-    @property
-    def slice_shape(self) -> tuple[int, int]:
-        return self._slice_shape
-
-    @property
-    def observation_space(self) -> gym.spaces.Space[np.ndarray]:
-        """Boolean 2-d array representing segregated labelmap slice."""
-        return self._observation_space
-
-
-class LabelmapSliceAsChannelsObservation(ArrayObservation[LabelmapStateAction]):
-    def __init__(self, slice_shape: tuple[int, int]):
-        """:param slice_shape: slices will be cropped to this shape (we need a consistent observation space)."""
-        self._slice_shape = slice_shape
-        self._output_shape = (len(TissueLabel),) + slice_shape + (4, 1)  # noqa
-        self._observation_space = gym.spaces.Box(low=0, high=1, shape=self._output_shape)
-
-    def compute_observation(
-        self,
-        state: LabelmapStateAction,
-    ) -> tuple[ndarray[bool, dtype[bool_ | bool_]], ndarray, float | None]:
-        return self.compute_from_slice(state.labels_2d_slice, state.action, state.reward)
-
-    def compute_from_slice(
-        self,
-        labels_2d_slice: np.ndarray,
-        action: np.ndarray,
-        reward: float | None,
-    ) -> tuple[ndarray[bool, dtype[bool_]], ndarray, float | None]:
-        cropped_slice = crop_center(labels_2d_slice, self.slice_shape)
-        result = cast(
-            np.ndarray[bool, np.dtype[np.bool_]],
-            np.zeros(self.output_shape[:3], dtype=np.bool_),
-        )
-        for channel, label in enumerate(TissueLabel):
-            result[channel] = cropped_slice == label.value
-        return result, action, reward
-
-    @property
-    def slice_shape(self) -> tuple[int, int]:
-        return self._slice_shape
-
-    @property
-    def output_shape(self) -> tuple[int, int, int, int, int]:
-        return self._output_shape
-
-    @property
-    def observation_space(self) -> gym.spaces.Space[np.ndarray]:
-        """Boolean 2-d array representing segregated labelmap slice."""
-        return self._observation_space
-
-
-class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
-    def compute_observation(self, state: TStateAction) -> np.ndarray:
-        tissue_clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
-        return self.cluster_characteristics_array(tissue_cluster=tissue_clusters)
-
-    @staticmethod
-    def cluster_characteristics_array(tissue_cluster: TissueClusters) -> np.ndarray:
-        characteristics_array = np.zeros((3, 2))
-        characteristics_array[0, 0] = len(tissue_cluster.bones)
-        characteristics_array[1, 0] = len(tissue_cluster.tendons)
-        characteristics_array[2, 0] = len(tissue_cluster.ulnar)
-        return characteristics_array
-
-
-class LabelmapClusteringBasedReward(RewardMetric[LabelmapStateAction]):
-    def __init__(
-        self,
-        n_landmarks: Sequence[int] = (5, 2, 1),
-    ):
-        self.n_landmarks = n_landmarks
-
-    def compute_reward(self, state: LabelmapStateAction) -> float:
-        clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
-        return anatomy_based_rwd(tissue_clusters=clusters, n_landmarks=self.n_landmarks)
-
-    @property
-    def range(self) -> tuple[float, float]:
-        return 0.0, 1.0
 
 
 class LabelmapEnvTerminationCriterion(TerminationCriterion["LabelmapEnv"], ABC):
     def __init__(
         self,
-        reward_satisfaction: float = 0.1,
+        min_reward_threshold: float = -0.1,
     ):
-        self.reward_satisfaction = reward_satisfaction
+        self.min_reward_threshold = min_reward_threshold
 
     def should_terminate(self, env: "LabelmapEnv") -> bool:
-        return env.cur_reward < self.reward_satisfaction
+        return env.cur_reward > self.min_reward_threshold
 
 
 class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):

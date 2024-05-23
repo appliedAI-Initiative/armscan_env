@@ -57,6 +57,10 @@ class Observation(Generic[TStateAction, TObs], ABC):
         pass
 
 
+class DictObservation(Observation[TStateAction, dict[str, np.ndarray]], Generic[TStateAction], ABC):
+    pass
+
+
 class ArrayObservation(Observation[TStateAction, np.ndarray], Generic[TStateAction], ABC):
     pass
 

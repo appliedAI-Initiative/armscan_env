@@ -169,7 +169,10 @@ class ActorFactoryArmscanDQN(ActorFactory):
         self.features_only = features_only
 
     def create_module(self, envs: Environments, device: TDevice) -> ActorProb:
-        c, h, w, a, r = envs.get_observation_shape()  # type: ignore  # only right shape is a sequence of length 3
+        chw, _a, _r = envs.get_observation_shape()  # type: ignore
+        c, h, w = chw  # type: ignore
+        (a,) = _a  # type: ignore
+        (r,) = _r  # type: ignore
         action_shape = envs.get_action_shape()
         if isinstance(action_shape, np.int64):
             action_shape = int(action_shape)

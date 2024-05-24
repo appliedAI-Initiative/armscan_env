@@ -1,9 +1,10 @@
 from collections.abc import Callable, Sequence
-from typing import Any, Generic
+from typing import Any, Generic, cast
 
+import gymnasium as gym
 import numpy as np
 import torch
-from tianshou.data.batch import BatchProtocol
+from tianshou.data.batch import Batch, BatchProtocol
 from tianshou.utils.net.common import TRecurrentState
 from torch import nn
 
@@ -101,23 +102,28 @@ class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
 
     def forward(
         self,
-        obs: LabelmapsObsBatchProtocol,
+        obs: gym.spaces.Dict,
         state: Any | None = None,
         info: dict[str, Any] | None = None,
     ) -> tuple[torch.Tensor, Any]:
         r"""Mapping: s -> Q(s, \*)."""
-        channeled_labelmap = torch.as_tensor(
-            obs.channelled_labelmap_BCWH,
-            device=self.device,
-            dtype=torch.float32,
+        obs_batch = cast(
+            LabelmapsObsBatchProtocol,
+            Batch(
+                channelled_labelmap_BCWH=obs["channeled_slice"],
+                action_BA=obs["action"],
+                reward_B=obs["reward"],
+            ),
         )
+
+        channeled_labelmap = torch.as_tensor(obs_batch.channelled_labelmap_BCWH)
         image_output = self.cnn(channeled_labelmap)
 
         action_reward = torch.concat(
-            [torch.from_numpy(obs.action_BA), torch.from_numpy(obs.reward_B)],
-            dim=0,
+            [torch.as_tensor(obs_batch.action_BA), torch.as_tensor(obs_batch.reward_B)],
+            dim=1,
         )
         action_reward_output = self.mlp(action_reward)
 
-        concat = torch.cat([image_output, action_reward_output], dim=0)
+        concat = torch.cat([image_output, action_reward_output], dim=1)
         return self.combined(concat), state

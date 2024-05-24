@@ -31,6 +31,30 @@ class LabelmapSliceObservation(ArrayObservation[LabelmapStateAction]):
         return self._observation_space
 
 
+class LabelmapDictSpace(gym.spaces.Dict):
+    def __init__(
+        self,
+        slice_shape: tuple[int, int],
+        action_shape: tuple[int],
+        reward_shape: tuple[int],
+    ):
+        self._slice_shape = slice_shape
+        self._channeled_slice_shape = (len(TissueLabel),) + slice_shape  # noqa
+        self._action_shape = action_shape
+        self._reward_shape = reward_shape
+        super().__init__(
+            {
+                "channeled_slice": gym.spaces.Box(low=0, high=1, shape=self._channeled_slice_shape),
+                "action": gym.spaces.Box(low=-1, high=1, shape=self._action_shape),
+                "reward": gym.spaces.Box(low=-1, high=0, shape=self._reward_shape),
+            },
+        )
+
+    @property
+    def shape(self) -> tuple[tuple[int, int, int], tuple[int, ...], tuple[int]]:  # type: ignore
+        return self._channeled_slice_shape, self._action_shape, self._reward_shape
+
+
 class LabelmapSliceAsChannelsObservation(DictObservation[LabelmapStateAction]):
     def __init__(
         self,
@@ -38,19 +62,15 @@ class LabelmapSliceAsChannelsObservation(DictObservation[LabelmapStateAction]):
         action_shape: tuple[int],
         reward_shape: tuple[int],
     ):
-        """:param slice_shape: slices will be cropped to this shape (we need a consistent observation space).
-        :param state: the state-action pair that will be used to determine the output shape.
-        """
+        """:param slice_shape: slices will be cropped to this shape (we need a consistent observation space)."""
         self._slice_shape = slice_shape
         self._channeled_slice_shape = (len(TissueLabel),) + slice_shape  # noqa
         self._action_shape = action_shape
         self._reward_shape = reward_shape
-        self._observation_space = gym.spaces.Dict(
-            {
-                "channeled_slice": gym.spaces.Box(low=0, high=1, shape=self._channeled_slice_shape),
-                "action": gym.spaces.Box(low=-1, high=1, shape=self._action_shape),
-                "reward": gym.spaces.Box(low=-1, high=0, shape=self._reward_shape),
-            },
+        self._observation_space = LabelmapDictSpace(
+            slice_shape=slice_shape,
+            action_shape=action_shape,
+            reward_shape=reward_shape,
         )
 
     def compute_observation(
@@ -89,6 +109,10 @@ class LabelmapSliceAsChannelsObservation(DictObservation[LabelmapStateAction]):
     @property
     def reward_shape(self) -> tuple[int]:
         return self._reward_shape
+
+    @property
+    def shape(self) -> tuple[tuple[int, int, int], tuple[int, ...], tuple[int]]:
+        return self.channeled_slice_shape, self.action_shape, self.reward_shape
 
     @property
     def observation_space(self) -> gym.spaces.Dict:

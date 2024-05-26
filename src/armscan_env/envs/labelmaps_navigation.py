@@ -41,6 +41,18 @@ class LabelmapEnvTerminationCriterion(TerminationCriterion["LabelmapEnv"], ABC):
 
 
 class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
+    """:param name2volume: mapping from labelmap names to volumes. One of these volumes will be selected at reset.
+    :param observation: defines the observation space, e.g. LabelmapSliceObservation
+    :param reward_metric: defines the reward metric that will be used, e.g. LabelmapClusteringBasedReward
+    :param termination_criterion: if None, no termination criterion will be used
+    :param slice_shape: determines the shape of the 2D slices that will be used as observations
+    :param max_episode_len: maximum number of steps in an episode
+    :param angle_bounds: bounds for the rotation angles in degrees
+    :param translation_bounds: bounds for the translation in mm. If None, the bound will be computed from the volume size.
+    :param render_mode: determines how the environment will be rendered. Allowed values: "plt", "animation"
+    :param seed: seed for the random number generator
+    """
+
     _INITIAL_POS_ROTATION = np.zeros(4)
 
     metadata: ClassVar[dict] = {"render_modes": ["plt", "animation", None], "render_fps": 10}
@@ -58,16 +70,6 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         render_mode: Literal["plt", "animation"] | None = None,
         seed: int | None = DEFAULT_SEED,
     ):
-        """:param name2volume: mapping from labelmap names to volumes. One of these volumes will be selected at reset.
-        :param reward_metric: defines the reward metric that will be used, e.g. LabelmapClusteringBasedReward
-        :param observation: defines the observation space, e.g. LabelmapSliceObservation
-        :param slice_shape: determines the shape of the 2D slices that will be used as observations
-        :param termination_criterion: if None, no termination criterion will be used
-        :param max_episode_len: maximum number of steps in an episode
-        :param angle_bounds: bounds for the rotation angles in degrees
-        :param translation_bounds: bounds for the translation in mm. If None, the bound will be computed from the volume size.
-        :param render_mode: determines how the environment will be rendered. Allowed values: "plt", "animation"
-        """
         if not name2volume:
             raise ValueError("name2volume must not be empty")
         if render_mode not in self.metadata["render_modes"]:

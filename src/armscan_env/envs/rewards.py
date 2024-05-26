@@ -86,6 +86,10 @@ def anatomy_based_rwd(
 
 
 class LabelmapClusteringBasedReward(RewardMetric[LabelmapStateAction]):
+    """Reward metric based on the presence and location of anatomical landmarks.
+    The reward is calculated as the negative of the loss function calculated by anatomy_based_rwd.
+    """
+
     def __init__(
         self,
         n_landmarks: Sequence[int] = (5, 2, 1),
@@ -98,4 +102,5 @@ class LabelmapClusteringBasedReward(RewardMetric[LabelmapStateAction]):
 
     @property
     def range(self) -> tuple[float, float]:
+        """Reward range is [-1, 0], where 0 is the best reward and -1 is the worst."""
         return -1.0, 0.0

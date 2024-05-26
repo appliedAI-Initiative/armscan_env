@@ -11,7 +11,11 @@ from torch import nn
 # KEEP IN SYNC WITH ChanneledLabelmapsObsWithActReward
 # This batch will be created automatically from these observations
 class LabelmapsObsBatchProtocol(BatchProtocol):
-    channelled_slice: np.ndarray
+    """Batch protocol for the observation of the LabelmapSliceAsChannelsObservation class.
+    Must have the same fields as the TDict of ChanneledLabelmapsObsWithActReward.
+    """
+
+    channeled_slice: np.ndarray
     action: np.ndarray
     reward: np.ndarray
 
@@ -24,6 +28,30 @@ def layer_init(layer: nn.Module, std: float = np.sqrt(2), bias_const: float = 0.
 
 
 class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
+    """A composed network for DQN with a CNN for the channeled slice observation and an MLP for the action-reward
+    observation.
+    The CNN is composed of 3 convolutional layers with ReLU activation functions.
+
+    * input: channeled slice observation,
+    * first layer: 32 filters with kernel size 8 and stride 4,
+    * second layer: 64 filters with kernel size 4 and stride 2,
+    * third layer: 64 filters with kernel size 3 and stride 1.
+    * output: flattened output.
+
+    The MLP is composed of 2 linear layers with ReLU activation functions.
+
+    * input: last action and previous reward concatenated,
+    * hidden layer: 512 units,
+    * output layer: mlp_output_dim units.
+
+    The final processing MLP is composed of 3 linear layers with ReLU activation functions.
+
+    * input: concatenation of the CNN and MLP outputs,
+    * first layer: 512 units,
+    * second layer: 512 units,
+    * output layer: action_dim units.
+    """
+
     def __init__(
         self,
         c: int,
@@ -76,16 +104,14 @@ class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
         obs: LabelmapsObsBatchProtocol,
         state: Any | None = None,
     ) -> tuple[torch.Tensor, Any]:
-        r"""Mapping: s -> Q(s, \*)."""
-        # obs_batch = cast(
-        #     LabelmapsObsBatchProtocol,
-        #     Batch(
-        #         channelled_labelmap_BCWH=obs["channeled_slice"],
-        #         action_BA=obs["action"],
-        #         reward_B=obs["reward"],
-        #     ),
-        # )
+        r"""Mapping: s -> Q(s, \*).
 
+        This method is used to generate the Q value from the given input data.
+        * The channeled_slice observation is passed through a CNN,
+        * The last action and previous reward are concatenated and passed through an MLP,
+        * The outputs of the CNN and MLP are concatenated and passed through a final MLP.
+        The output of the final MLP is the Q value of each action.
+        """
         channeled_slice = torch.as_tensor(obs.channeled_slice)
         image_output = self.channeled_slice_cnn_CHW(channeled_slice)
 

@@ -11,11 +11,14 @@ log = logging.getLogger(__name__)
 
 
 class TissueLabel(Enum):
+    """Enum class for tissue labels in the labelmap volume."""
+
     BONES = 1
     TENDONS = 2
     ULNAR = 3
 
     def find_DBSCAN_clusters(self, labelmap_slice: np.ndarray) -> list["DataCluster"]:
+        """Find clusters of a given tissue in a slice using DBSCAN."""
         match self:
             case TissueLabel.BONES:
                 return find_DBSCAN_clusters(self, labelmap_slice, eps=4.1, min_samples=46)
@@ -29,17 +32,22 @@ class TissueLabel(Enum):
 
 @dataclass(kw_only=True)
 class DataCluster:
+    """Data class for a cluster of a tissue in a slice."""
+
     cluster: list[tuple[float, float]] | np.ndarray
     center: tuple[np.floating[Any], np.floating[Any]]
 
 
 @dataclass(kw_only=True)
 class TissueClusters:
+    """Data class for all tissue clusters in a slice of a labelmap volume built using DBSCAN."""
+
     bones: list[DataCluster]
     tendons: list[DataCluster]
     ulnar: list[DataCluster]
 
     def get_cluster_for_label(self, label: TissueLabel) -> list[DataCluster]:
+        """Get the clusters for a given tissue label."""
         match label:
             case TissueLabel.BONES:
                 return self.bones

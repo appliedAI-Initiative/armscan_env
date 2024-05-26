@@ -29,6 +29,25 @@ log = logging.getLogger(__name__)
 
 
 class ArmscanEnvFactory(EnvFactory):
+    """:param name2volume: the gymnasium task/environment identifier
+    :param observation: the observation space to use
+    :param reward_metric: the reward metric to use
+    :param termination_criterion: the termination criterion to use
+    :param slice_shape: the shape of the slice
+    :param max_episode_len: the maximum episode length
+    :param angle_bounds: the bounds for the angles
+    :param translation_bounds: the bounds for the translations
+    :param render_mode_train: the render mode to use for training environments
+    :param render_mode_test: the render mode to use for test environments
+    :param render_mode_watch: the render mode to use for environments that are used to watch agent performance
+    :param venv_type: the type of vectorized environment to use
+    :param seed: the seed to use
+    :param n_stack: the number of observations to stack in a single observation
+    :param project_to_x_translation: constrains the action space to only x translation
+    :param remove_rotation_actions: removes the rotation actions from the action space
+    :param make_kwargs: additional keyword arguments to pass to the environment creation function
+    """
+
     def __init__(
         self,
         name2volume: dict[str, sitk.Image],
@@ -49,13 +68,6 @@ class ArmscanEnvFactory(EnvFactory):
         remove_rotation_actions: bool = False,
         **make_kwargs: Any,
     ) -> None:
-        """:param name2volume: the gymnasium task/environment identifier
-        :param render_mode_train: the render mode to use for training environments
-        :param render_mode_test: the render mode to use for test environments
-        :param render_mode_watch: the render mode to use for environments that are used to watch agent performance
-        :param venv_type: the type of vectorized environment to use
-        :param make_kwargs: additional keyword arguments to pass to the environment creation function
-        """
         super().__init__(venv_type)
         self.name2volume = name2volume
         self.observation = observation
@@ -86,7 +98,6 @@ class ArmscanEnvFactory(EnvFactory):
     def create_env(self, mode: EnvMode) -> Env:
         """Creates a single environment for the given mode.
 
-        :param mode: the mode
         :return: an environment
         """
         env = LabelmapEnv(
@@ -160,12 +171,15 @@ class RemoveRotationActionsEnvWrapper(ActionWrapper):
 
 
 class ActorFactoryArmscanDQN(ActorFactory):
+    """A factory for creating DQN_MLP_Concat actors for the armscan_env."""
+
     def __init__(
         self,
     ) -> None:
         super().__init__()
 
     def create_module(self, envs: Environments, device: TDevice) -> ActorProb:
+        """Creates a DQN_MLP_Concat actor for the given environments."""
         # happens because the envs will be built based on LabelmapEnv and its observation_space attr
         # which then delivers this kind of tuple of tuples
         # Will fail with any other envs object but we can't currently express this in typing

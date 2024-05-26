@@ -51,3 +51,10 @@ voxel
 convolutional
 preprocessed
 subspaces
+Enum
+rwd
+TDict
+armscan
+vectorized
+plt
+mlp

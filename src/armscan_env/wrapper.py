@@ -162,29 +162,20 @@ class RemoveRotationActionsEnvWrapper(ActionWrapper):
 class ActorFactoryArmscanDQN(ActorFactory):
     def __init__(
         self,
-        features_only: bool = False,
-        output_dim_added_layer: int | None = None,
     ) -> None:
-        self.output_dim_added_layer = output_dim_added_layer
-        self.features_only = features_only
+        super().__init__()
 
     def create_module(self, envs: Environments, device: TDevice) -> ActorProb:
-        chw, _a, _r = envs.get_observation_shape()  # type: ignore
-        c, h, w = chw  # type: ignore
-        (a,) = _a  # type: ignore
-        (r,) = _r  # type: ignore
-        action_shape = envs.get_action_shape()
-        if isinstance(action_shape, np.int64):
-            action_shape = int(action_shape)
+        # happens because the envs will be built based on LabelmapEnv and its observation_space attr
+        # which then delivers this kind of tuple of tuples
+        # Will fail with any other envs object but we can't currently express this in typing
+        # TODO: improve tianshou typing to solve this in env.TObservationShape
+        (c, h, w), (action_dim,), _ = envs.get_observation_shape()  # type: ignore
         net = DQN_MLP_Concat(
             c=c,
             h=h,
             w=w,
-            a=a,
-            r=r,
-            action_shape=action_shape,
+            action_dim=action_dim,
             device=device,
-            features_only=self.features_only,
-            output_dim_added_layer=self.output_dim_added_layer,
         )
         return ActorProb(net, envs.get_action_shape(), device=device).to(device)

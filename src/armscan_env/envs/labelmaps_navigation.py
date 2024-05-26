@@ -148,7 +148,8 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         return LabelmapStateAction(
             action=action,
             labels_2d_slice=new_slice,
-            reward=self.reward_metric.compute_reward(self.cur_state_action),
+            last_reward=self.reward_metric.compute_reward(self.cur_state_action),
+            # cur_state_action is the previous state, so this reward is computed for the previous state
             optimal_position=self.cur_state_action.optimal_position,
             optimal_labelmap=self.cur_state_action.optimal_labelmap,
         )
@@ -170,6 +171,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         return LabelmapStateAction(
             action=self._INITIAL_POS_ROTATION,
             labels_2d_slice=initial_slice,
+            last_reward=-1,
             optimal_position=None,
             optimal_labelmap=None,
         )

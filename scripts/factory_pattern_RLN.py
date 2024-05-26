@@ -29,9 +29,9 @@ sampling_config = SamplingConfig(
     batch_size=25,
     num_train_envs=-1,
     num_test_envs=10,
-    buffer_size=100000,
+    buffer_size=100,
     step_per_collect=1000,
-    replay_buffer_stack_num=4,
+    replay_buffer_stack_num=1,
 )
 
 volume_size = volume_1.GetSize()
@@ -40,7 +40,6 @@ env_factory = ArmscanEnvFactory(
     observation=LabelmapSliceAsChannelsObservation(
         slice_shape=(volume_size[2], volume_size[0]),
         action_shape=(4,),
-        reward_shape=(1,),
     ),
     slice_shape=(volume_size[0], volume_size[2]),
     max_episode_len=5000,
@@ -70,7 +69,7 @@ builder = (
             dist_fn=DistributionFunctionFactoryIndependentGaussians(),
         ),
     )
-    .with_actor_factory(ActorFactoryArmscanDQN(features_only=True, output_dim_added_layer=(512)))
+    .with_actor_factory(ActorFactoryArmscanDQN())
     .with_critic_factory_use_actor()
 )
 experiment = builder.build()

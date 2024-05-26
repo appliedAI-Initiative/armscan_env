@@ -44,7 +44,7 @@ class MultiBoxSpace(gym.spaces.Dict, Generic[TDict]):
     def __init__(self, name2box: dict[str, gym.spaces.Box]):
         # If we don't do this, gymnasium will order alphabetically in init
         name2box = OrderedDict(**name2box)
-        super().__init__(spaces=dict(name2box))
+        super().__init__(spaces=name2box)  # type: ignore
 
     @property
     def shape(self) -> list[Sequence[int]]:  # type: ignore # ToDo: improve Tianshou Space.shape

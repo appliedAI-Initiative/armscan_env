@@ -5195,7 +5195,7 @@ description = "A Library for Deep Reinforcement Learning"
 optional = false
 python-versions = "^3.11"
 files = []
-develop = false
+develop = true
 
 [package.dependencies]
 deepdiff = "^7.0.1"
@@ -5230,10 +5230,8 @@ robotics = ["gymnasium-robotics"]
 vizdoom = ["vizdoom"]
 
 [package.source]
-type = "git"
-url = "https://github.com/thu-ml/tianshou.git"
-reference = "6c7971a861c85214947d162b210d9f010332d4eb"
-resolved_reference = "6c7971a861c85214947d162b210d9f010332d4eb"
+type = "directory"
+url = "tianshou"
 
 [[package]]
 name = "tinycss2"
@@ -5638,4 +5636,4 @@ testing = ["big-O", "jaraco.functools", "jaraco.itertools", "more-itertools", "p
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "929e8eb8967b6a924c625796b6f43457dd0be3adba89e3fb1538f2120fc8d77d"
+content-hash = "03cef90f33d1ff3d9d7ac23b8933c3e831c6d5ec296aae22ea88a92c90c0ebea"

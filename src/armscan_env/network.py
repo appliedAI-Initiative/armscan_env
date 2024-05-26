@@ -3,9 +3,10 @@ from typing import Any, Generic
 
 import numpy as np
 import torch
+from torch import nn
+
 from tianshou.data.batch import BatchProtocol
 from tianshou.utils.net.common import TRecurrentState
-from torch import nn
 
 
 # KEEP IN SYNC WITH ChanneledLabelmapsObsWithActReward

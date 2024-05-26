@@ -15,6 +15,7 @@ from armscan_env.envs.state_action import LabelmapStateAction
 from armscan_env.network import DQN_MLP_Concat
 from gymnasium import ActionWrapper, Env, spaces
 from gymnasium.wrappers import FrameStack
+
 from tianshou.highlevel.env import (
     EnvFactory,
     Environments,
@@ -61,7 +62,7 @@ class ArmscanEnvFactory(EnvFactory):
         render_mode_train: Literal["plt", "animation"] | None = None,
         render_mode_test: Literal["plt", "animation"] | None = None,
         render_mode_watch: Literal["plt", "animation"] | None = "animation",
-        venv_type: VectorEnvType = VectorEnvType.SUBPROC_SHARED_MEM,
+        venv_type: VectorEnvType = VectorEnvType.SUBPROC_SHARED_MEM_AUTO,
         seed: int | None = None,
         n_stack: int = 1,
         project_to_x_translation: bool = False,

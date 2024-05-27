@@ -85,6 +85,7 @@ class LabelmapSliceAsChannelsObservation(DictObservation[LabelmapStateAction]):
                     low=0,
                     high=1,
                     shape=(len(TissueLabel), *slice_shape),
+                    dtype=np.bool_
                 ),
                 "action": gym.spaces.Box(low=-1, high=1, shape=action_shape),
                 "reward": gym.spaces.Box(low=-1, high=0, shape=(1,)),

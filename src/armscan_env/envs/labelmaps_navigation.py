@@ -173,7 +173,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         return LabelmapStateAction(
             action=self._INITIAL_POS_ROTATION,
             labels_2d_slice=initial_slice,
-            last_reward=-1,
+            last_reward=-1.,
             optimal_position=None,
             optimal_labelmap=None,
         )

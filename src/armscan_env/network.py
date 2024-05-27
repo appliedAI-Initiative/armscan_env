@@ -113,11 +113,11 @@ class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
         * The outputs of the CNN and MLP are concatenated and passed through a final MLP.
         The output of the final MLP is the Q value of each action.
         """
-        channeled_slice = torch.as_tensor(obs.channeled_slice)
+        channeled_slice = torch.as_tensor(obs.channeled_slice, dtype=torch.float, device=self.device)
         image_output = self.channeled_slice_cnn_CHW(channeled_slice)
 
         action_reward = torch.concat(
-            [torch.as_tensor(obs.action), torch.as_tensor(obs.reward)],
+            [torch.as_tensor(obs.action, device=self.device), torch.as_tensor(obs.reward, device=self.device)],
             dim=1,
         )
         action_reward_output = self.action_reward_mlp(action_reward)

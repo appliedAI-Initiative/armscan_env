@@ -12,19 +12,14 @@ from armscan_env.envs.labelmaps_navigation import (
 )
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
 from armscan_env.envs.state_action import LabelmapStateAction
-from armscan_env.network import DQN_MLP_Concat
 from gymnasium import ActionWrapper, Env, spaces
 from gymnasium.wrappers import FrameStack
 
 from tianshou.highlevel.env import (
     EnvFactory,
-    Environments,
     EnvMode,
     VectorEnvType,
 )
-from tianshou.highlevel.module.actor import ActorFactory
-from tianshou.highlevel.module.core import TDevice
-from tianshou.utils.net.continuous import ActorProb
 
 log = logging.getLogger(__name__)
 
@@ -169,28 +164,3 @@ class RemoveRotationActionsEnvWrapper(ActionWrapper):
                 ),
             },
         )
-
-
-class ActorFactoryArmscanDQN(ActorFactory):
-    """A factory for creating DQN_MLP_Concat actors for the armscan_env."""
-
-    def __init__(
-        self,
-    ) -> None:
-        super().__init__()
-
-    def create_module(self, envs: Environments, device: TDevice) -> ActorProb:
-        """Creates a DQN_MLP_Concat actor for the given environments."""
-        # happens because the envs will be built based on LabelmapEnv and its observation_space attr
-        # which then delivers this kind of tuple of tuples
-        # Will fail with any other envs object but we can't currently express this in typing
-        # TODO: improve tianshou typing to solve this in env.TObservationShape
-        (c, h, w), (action_dim,), _ = envs.get_observation_shape()  # type: ignore
-        net = DQN_MLP_Concat(
-            c=c,
-            h=h,
-            w=w,
-            action_dim=action_dim,
-            device=device,
-        )
-        return ActorProb(net, envs.get_action_shape(), device=device).to(device)

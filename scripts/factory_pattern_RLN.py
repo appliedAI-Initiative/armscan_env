@@ -3,8 +3,12 @@
 import os
 
 import SimpleITK as sitk
-from armscan_env.envs.observations import LabelmapSliceAsChannelsObservation
-from armscan_env.wrapper import ActorFactoryArmscanDQN, ArmscanEnvFactory
+from armscan_env.envs.observations import (
+    LabelmapSliceAsChannelsObservation,
+)
+from armscan_env.network import ActorFactoryArmscanDQN
+from armscan_env.wrapper import ArmscanEnvFactory
+
 from tianshou.highlevel.config import SamplingConfig
 from tianshou.highlevel.experiment import ExperimentConfig, PPOExperimentBuilder
 from tianshou.highlevel.params.dist_fn import (

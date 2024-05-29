@@ -117,8 +117,8 @@ class LabelmapSliceAsChannelsObservation(DictObservation[LabelmapStateAction]):
             channeled_slice[channel] = cropped_slice == label.value
         return {
             "channeled_slice": channeled_slice,
-            "action": action,
-            "reward": np.array(last_reward),
+            "action": np.array(action, dtype=np.float32),
+            "reward": np.array([last_reward], dtype=np.float32),
         }
 
     @property

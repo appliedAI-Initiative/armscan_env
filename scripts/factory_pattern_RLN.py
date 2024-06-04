@@ -10,6 +10,7 @@ from armscan_env.network import ActorFactoryArmscanDQN
 from armscan_env.wrapper import ArmscanEnvFactory
 
 from tianshou.highlevel.config import SamplingConfig
+from tianshou.highlevel.env import VectorEnvType
 from tianshou.highlevel.experiment import ExperimentConfig, PPOExperimentBuilder
 from tianshou.highlevel.params.dist_fn import (
     DistributionFunctionFactoryIndependentGaussians,
@@ -35,7 +36,6 @@ sampling_config = SamplingConfig(
     num_test_envs=10,
     buffer_size=100,
     step_per_collect=1000,
-    replay_buffer_stack_num=1,
 )
 
 volume_size = volume_1.GetSize()
@@ -51,6 +51,8 @@ env_factory = ArmscanEnvFactory(
     translation_bounds=(0.0, None),
     render_mode="animation",
     seed=experiment_config.seed,
+    venv_type=VectorEnvType.SUBPROC_SHARED_MEM_AUTO,
+    n_stack=4,
 )
 
 builder = (

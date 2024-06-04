@@ -10,10 +10,11 @@ from armscan_env.envs.labelmaps_navigation import (
     LabelmapEnv,
     LabelmapEnvTerminationCriterion,
 )
+from armscan_env.envs.observations import MultiBoxSpace
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
 from armscan_env.envs.state_action import LabelmapStateAction
 from gymnasium import ActionWrapper, Env, spaces
-from gymnasium.wrappers import FrameStack
+from gymnasium.wrappers import FrameStackObservation
 
 from tianshou.highlevel.env import (
     EnvFactory,
@@ -116,7 +117,8 @@ class ArmscanEnvFactory(EnvFactory):
             env = RemoveRotationActionsEnvWrapper(env)
 
         if self.n_stack > 1:
-            env = FrameStack(env, self.n_stack)
+            env = FrameStackObservation(env, self.n_stack)
+            env.observation_space = MultiBoxSpace(env.observation_space)
 
         return env
 

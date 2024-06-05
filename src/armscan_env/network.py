@@ -6,7 +6,11 @@ import torch
 from torch import nn
 
 from tianshou.data.batch import BatchProtocol
+from tianshou.highlevel.env import Environments
+from tianshou.highlevel.module.actor import ActorFactory
+from tianshou.highlevel.module.core import TDevice
 from tianshou.utils.net.common import TRecurrentState
+from tianshou.utils.net.continuous import ActorProb
 
 
 # KEEP IN SYNC WITH ChanneledLabelmapsObsWithActReward
@@ -59,15 +63,19 @@ class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
         h: int,
         w: int,
         action_dim: int,
+        n_stack: int,
         device: str | int | torch.device = "cpu",
         mlp_output_dim: int = 512,
         layer_init: Callable[[nn.Module], nn.Module] = layer_init,
     ) -> None:
         super().__init__()
         self.device = device
+        self.n_stack = n_stack
+        self.stacked_slice_shape = (n_stack * c, h, w)
+        self.stacked_act_rew_shape = (n_stack * (action_dim + 1),)
 
         self.channeled_slice_cnn_CHW = nn.Sequential(
-            layer_init(nn.Conv2d(c, 32, kernel_size=8, stride=4)),
+            layer_init(nn.Conv2d(n_stack * c, 32, kernel_size=8, stride=4)),
             nn.ReLU(inplace=True),
             layer_init(nn.Conv2d(32, 64, kernel_size=4, stride=2)),
             nn.ReLU(inplace=True),
@@ -76,7 +84,7 @@ class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
             nn.Flatten(),
         )
 
-        mlp_input_dim = action_dim + 1  # action concatenated with reward
+        mlp_input_dim = n_stack * (action_dim + 1)  # action concatenated with reward
         self.action_reward_mlp = nn.Sequential(
             nn.Linear(mlp_input_dim, 512),
             nn.ReLU(inplace=True),
@@ -86,7 +94,7 @@ class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
 
         with torch.no_grad():
             base_cnn_output_dim = int(
-                np.prod(self.channeled_slice_cnn_CHW(torch.zeros(1, c, h, w)).shape[1:]),
+                np.prod(self.channeled_slice_cnn_CHW(torch.zeros(1, n_stack * c, h, w)).shape[1:]),
             )
         base_mlp_output_dim = mlp_output_dim
         concat_dim = base_cnn_output_dim + base_mlp_output_dim
@@ -113,14 +121,52 @@ class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
         * The outputs of the CNN and MLP are concatenated and passed through a final MLP.
         The output of the final MLP is the Q value of each action.
         """
-        channeled_slice = torch.as_tensor(obs.channeled_slice)
+        channeled_slice = torch.as_tensor(
+            obs.channeled_slice,
+            dtype=torch.float,
+            device=self.device,
+        ).reshape(-1, *self.stacked_slice_shape)
         image_output = self.channeled_slice_cnn_CHW(channeled_slice)
 
         action_reward = torch.concat(
-            [torch.as_tensor(obs.action), torch.as_tensor(obs.reward)],
-            dim=1,
-        )
+            [
+                torch.as_tensor(obs.action, device=self.device),
+                torch.as_tensor(obs.reward, device=self.device),
+            ],
+            dim=-1,
+        ).reshape(-1, *self.stacked_act_rew_shape)
         action_reward_output = self.action_reward_mlp(action_reward)
 
         concat = torch.cat([image_output, action_reward_output], dim=1)
         return self.final_processing_mlp(concat), state
+
+
+class ActorFactoryArmscanDQN(ActorFactory):
+    """A factory for creating DQN_MLP_Concat actors for the armscan_env."""
+
+    def __init__(
+        self,
+    ) -> None:
+        super().__init__()
+
+    def create_module(self, envs: Environments, device: TDevice) -> ActorProb:
+        """Creates a DQN_MLP_Concat actor for the given environments."""
+        # happens because the envs will be built based on LabelmapEnv and its observation_space attr
+        # which then delivers this kind of tuple of tuples
+        # Will fail with any other envs object but we can't currently express this in typing
+        # TODO: improve tianshou typing to solve this in env.TObservationShape
+        try:
+            (c, h, w), (action_dim,), _ = envs.get_observation_shape()  # type: ignore
+            n_stack = 1
+        except BaseException:
+            ((n_stack, c, h, w), (_, action_dim,), _,) = envs.get_observation_shape()  # type: ignore # noqa
+
+        net: DQN_MLP_Concat = DQN_MLP_Concat(
+            c=c,
+            h=h,
+            w=w,
+            action_dim=action_dim,
+            n_stack=n_stack,
+            device=device,
+        )
+        return ActorProb(net, envs.get_action_shape(), device=device).to(device)

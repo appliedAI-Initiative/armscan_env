@@ -173,7 +173,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         return LabelmapStateAction(
             action=self._INITIAL_POS_ROTATION,
             labels_2d_slice=initial_slice,
-            last_reward=-1,
+            last_reward=-1.0,
             optimal_position=None,
             optimal_labelmap=None,
         )
@@ -222,6 +222,8 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             self.translation_bounds = self.user_defined_bounds[1]
         if reset_slice_shape:
             self._slice_shape = None
+        # Remove the seed from kwargs if it exists
+        kwargs.pop('seed', None)
         obs, info = super().reset(seed=self._seed, **kwargs)
         return obs, info
 

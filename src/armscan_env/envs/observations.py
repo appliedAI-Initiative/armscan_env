@@ -1,4 +1,3 @@
-from collections import OrderedDict
 from collections.abc import Sequence
 from typing import (
     Any,
@@ -41,10 +40,9 @@ class MultiBoxSpace(gym.spaces.Dict, Generic[TDict]):
     :param name2box: dictionary of the name of the observation space and the Box space.
     """
 
-    def __init__(self, name2box: dict[str, gym.spaces.Box]):
-        # If we don't do this, gymnasium will order alphabetically in init
-        name2box = OrderedDict(**name2box)
+    def __init__(self, name2box: dict[str, gym.spaces.Box] | gym.spaces.Dict):
         super().__init__(spaces=name2box)  # type: ignore
+        self.spaces = name2box  # type: ignore
 
     @property
     def shape(self) -> list[Sequence[int]]:  # type: ignore # ToDo: improve Tianshou Space.shape
@@ -116,8 +114,8 @@ class LabelmapSliceAsChannelsObservation(DictObservation[LabelmapStateAction]):
             channeled_slice[channel] = cropped_slice == label.value
         return {
             "channeled_slice": channeled_slice,
-            "action": action,
-            "reward": np.array(last_reward),
+            "action": np.array(action, dtype=np.float32),
+            "reward": np.array([last_reward], dtype=np.float32),
         }
 
     @property

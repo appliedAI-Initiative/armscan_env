@@ -149,29 +149,79 @@ class LabelmapSliceAsChannelsObservation(DictObservation[LabelmapStateAction]):
         return self._observation_space
 
 
-class LabelmapSliceObservation(ArrayObservation[LabelmapStateAction]):
+class LabelmapSliceObservation(DictObservation[LabelmapStateAction]):
     """Observation space for a labelmap slice.
     To test performance diff between this and LabelmapSliceAsChannelsObservation.
 
     :param slice_shape: slices will be cropped to this shape (we need a consistent observation space).
     """
 
-    def __init__(self, slice_shape: tuple[int, int]):
-        self._slice_shape = slice_shape
-        self._observation_space = gym.spaces.Box(low=0, high=4, shape=slice_shape)
+    def __init__(
+        self,
+        slice_shape: tuple[int, int],
+        action_shape: tuple[int],
+    ):
+        self._observation_space = MultiBoxSpace[ChanneledLabelmapsObsWithActReward](
+            {
+                "channeled_slice": gym.spaces.Box(
+                    low=0,
+                    high=1,
+                    shape=slice_shape,
+                ),
+                "action": gym.spaces.Box(low=-1, high=1, shape=action_shape),
+                "reward": gym.spaces.Box(low=-1, high=0, shape=(1,)),
+            },
+        )
 
-    def compute_observation(self, state: LabelmapStateAction) -> np.ndarray:
-        return self.compute_from_slice(state.labels_2d_slice)
+    def compute_observation(
+        self,
+        state: LabelmapStateAction,
+    ) -> ChanneledLabelmapsObsWithActReward:
+        """Return the observation as a dictionary of the type ChanneledLabelmapsObsWithActReward."""
+        return self.compute_from_slice(state.labels_2d_slice, state.action, state.last_reward)
 
-    def compute_from_slice(self, labels_2d_slice: np.ndarray) -> np.ndarray:
-        return crop_center(labels_2d_slice, self.slice_shape)
+    def compute_from_slice(
+        self,
+        labels_2d_slice: np.ndarray,
+        action: np.ndarray,
+        last_reward: float,
+    ) -> ChanneledLabelmapsObsWithActReward:
+        """Compute the observation from the labelmap slice, action, and reward and saves it in a dictionary of the
+        form of ChanneledLabelmapsObsWithActReward.
+        """
+        cropped_slice = crop_center(labels_2d_slice, self.slice_hw)
+        return {
+            "channeled_slice": np.array(cropped_slice, dtype=np.float32),
+            "action": np.array(action, dtype=np.float32),
+            "reward": np.array([last_reward], dtype=np.float32),
+        }
+
+    @property
+    def slice_hw(self) -> tuple[int, int]:
+        return self.slice_shape
 
     @property
     def slice_shape(self) -> tuple[int, int]:
-        return self._slice_shape
+        return cast(
+            tuple[int, int],
+            self.observation_space.get_shape_from_name("channeled_slice"),
+        )
 
     @property
-    def observation_space(self) -> gym.spaces.Space[np.ndarray]:
+    def action_shape(self) -> tuple[int]:
+        return cast(tuple[int], self.observation_space.get_shape_from_name("action"))
+
+    # (h, w), (n_actions), (1)
+    @property
+    def shape(self) -> tuple[tuple[int, int], tuple[int], tuple[int]]:
+        return cast(
+            tuple[tuple[int, int], tuple[int], tuple[int]],
+            self.observation_space.shape,
+        )
+
+    @property
+    def observation_space(self) -> MultiBoxSpace:
+        """Boolean 2-d array representing segregated labelmap slice."""
         return self._observation_space
 
 

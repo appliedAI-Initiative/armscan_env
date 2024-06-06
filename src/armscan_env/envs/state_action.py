@@ -10,15 +10,15 @@ log = logging.getLogger(__name__)
 
 @dataclass(kw_only=True)
 class ManipulatorAction:
-    rotation: np.ndarray
+    rotation: tuple[float, float]
     """Array of shape (2,) representing two angles in degrees (z_rot, x_rot). The angles will take values between
     -180 and 180 deg."""
-    translation: np.ndarray
+    translation: tuple[float, float]
     """Array of shape (2,) representing two translations (x_trans, y_trans) in mm."""
 
     def to_normalized_array(
         self,
-        angle_bounds: tuple[float, float],
+        rotation_bounds: tuple[float, float],
         translation_bounds: tuple[float | None, float | None],
     ) -> np.ndarray:
         """Converts the action to a 1D array. If angle_bounds is not None, the angles will be normalized to the range
@@ -26,9 +26,19 @@ class ManipulatorAction:
         """
         if None in translation_bounds:
             raise ValueError("Translation bounds must not be None,this should not happen.")
-        rotation = self.rotation / angle_bounds
         # normalize translation to [-1, 1]: 0 -> -1, translation_bounds -> 1
-        translation = 2 * self.translation / translation_bounds - 1  # type: ignore
+        rotation = np.zeros(2)
+        translation = np.zeros(2)
+        for i in range(2):
+            if rotation_bounds[i] == 0.0:
+                rotation[i] = 0.0
+            else:
+                rotation[i] = self.rotation[i] / rotation_bounds[i]
+
+            if translation_bounds[i] == 0.0:
+                translation[i] = 0.0
+            else:
+                translation[i] = 2 * self.translation[i] / translation_bounds[i] - 1  # type: ignore
 
         result = np.concatenate([rotation, translation])
 
@@ -36,7 +46,7 @@ class ManipulatorAction:
             raise ValueError(
                 f"Angles or translations are out of bounds: "
                 f"{self.rotation=}, {self.translation=},"
-                f" {angle_bounds=}, {translation_bounds=}",
+                f" {rotation_bounds=}, {translation_bounds=}",
             )
         return result
 
@@ -64,7 +74,7 @@ class ManipulatorAction:
         translation = (action[2:] + 1) / 2 * translation_bounds
         log.debug(f"Unnormalized action: {rotation=} deg, {translation=}")
 
-        return cls(rotation=rotation, translation=translation)  # type: ignore
+        return cls(rotation=tuple(rotation), translation=tuple(translation))  # type: ignore
 
 
 @dataclass(kw_only=True)

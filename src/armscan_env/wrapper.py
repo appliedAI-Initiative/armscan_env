@@ -3,6 +3,7 @@
 import logging
 from typing import Any, Literal
 
+import gymnasium as gym
 import numpy as np
 import SimpleITK as sitk
 from armscan_env.envs.base import Observation, RewardMetric, TerminationCriterion
@@ -12,8 +13,8 @@ from armscan_env.envs.labelmaps_navigation import (
 )
 from armscan_env.envs.observations import MultiBoxSpace
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
-from armscan_env.envs.state_action import LabelmapStateAction
-from gymnasium import ActionWrapper, Env, spaces
+from armscan_env.envs.state_action import LabelmapStateAction, ManipulatorAction
+from gymnasium import ActionWrapper, Env
 from gymnasium.wrappers import FrameStackObservation
 
 from tianshou.highlevel.env import (
@@ -32,7 +33,7 @@ class ArmscanEnvFactory(EnvFactory):
     :param termination_criterion: the termination criterion to use
     :param slice_shape: the shape of the slice
     :param max_episode_len: the maximum episode length
-    :param angle_bounds: the bounds for the angles
+    :param rotation_bounds: the bounds for the angles
     :param translation_bounds: the bounds for the translations
     :param render_mode_train: the render mode to use for training environments
     :param render_mode_test: the render mode to use for test environments
@@ -53,7 +54,7 @@ class ArmscanEnvFactory(EnvFactory):
         termination_criterion: TerminationCriterion | None = LabelmapEnvTerminationCriterion(),
         slice_shape: tuple[int, int] | None = None,
         max_episode_len: int | None = None,
-        angle_bounds: tuple[float, float] = (180, 180),
+        rotation_bounds: tuple[float, float] = (180, 180),
         translation_bounds: tuple[float | None, float | None] = (None, None),
         render_mode_train: Literal["plt", "animation"] | None = None,
         render_mode_test: Literal["plt", "animation"] | None = None,
@@ -62,6 +63,7 @@ class ArmscanEnvFactory(EnvFactory):
         seed: int | None = None,
         n_stack: int = 1,
         project_to_x_translation: bool = False,
+        optimal_action: ManipulatorAction | None = None,
         remove_rotation_actions: bool = False,
         **make_kwargs: Any,
     ) -> None:
@@ -72,7 +74,7 @@ class ArmscanEnvFactory(EnvFactory):
         self.reward_metric = reward_metric
         self.termination_criterion = termination_criterion
         self.max_episode_len = max_episode_len
-        self.angle_bounds = angle_bounds
+        self.rotation_bounds = rotation_bounds
         self.translation_bounds = translation_bounds
         self.render_modes = {
             EnvMode.TRAIN: render_mode_train,
@@ -82,6 +84,7 @@ class ArmscanEnvFactory(EnvFactory):
         self.seed = seed
         self.n_stack = n_stack
         self.project_to_x_translation = project_to_x_translation
+        self.optimal_action = optimal_action
         self.remove_rotation_actions = remove_rotation_actions
         self.make_kwargs = make_kwargs
 
@@ -104,17 +107,18 @@ class ArmscanEnvFactory(EnvFactory):
             reward_metric=self.reward_metric,
             termination_criterion=self.termination_criterion,
             max_episode_len=self.max_episode_len,
-            angle_bounds=self.angle_bounds,
+            rotation_bounds=self.rotation_bounds,
             translation_bounds=self.translation_bounds,
             render_mode=self.render_modes.get(mode),
             seed=self.seed,
         )
 
         if self.project_to_x_translation:
-            env = ProjectToXTranslationEnvWrapper(env)
-
-        if self.remove_rotation_actions:
-            env = RemoveRotationActionsEnvWrapper(env)
+            if self.optimal_action is None:
+                raise ValueError(
+                    "optimal_action must be provided when project_to_x_translation is True",
+                )
+            env = LinearSweepWrapper(env, self.optimal_action)
 
         if self.n_stack > 1:
             env = FrameStackObservation(env, self.n_stack)
@@ -123,46 +127,16 @@ class ArmscanEnvFactory(EnvFactory):
         return env
 
 
-class ProjectToXTranslationEnvWrapper(ActionWrapper):
-    def __init__(self, env: Env) -> None:
+class LinearSweepWrapper(ActionWrapper):
+    def __init__(self, env: LabelmapEnv, optimal_action: ManipulatorAction) -> None:
         super().__init__(env)
+        self.env: LabelmapEnv = env
+        self.action_space = gym.spaces.Box(-1.0, 1.0, shape=(1,))
+        self.optimal_action = optimal_action
 
-    def action(
-        self,
-        action: spaces.Space[np.ndarray],
-    ) -> spaces.Dict:
-        """Project the action to the x translation removing the y translation."""
-        return spaces.Dict(
-            {
-                "angle": spaces.Box(
-                    low=-1,
-                    high=1.0,
-                    shape=(2,),
-                ),
-                "x_translation": spaces.Box(
-                    low=-1,
-                    high=1.0,
-                    shape=(1,),
-                ),
-            },
+    def action(self, action: np.ndarray) -> np.ndarray:
+        normalized_optimal_action = self.optimal_action.to_normalized_array(
+            self.env.rotation_bounds,
+            self.env.translation_bounds,
         )
-
-
-class RemoveRotationActionsEnvWrapper(ActionWrapper):
-    def __init__(self, env: Env) -> None:
-        super().__init__(env)
-
-    def action(
-        self,
-        action: spaces.Space[np.ndarray],
-    ) -> spaces.Dict:
-        """Remove the rotation actions."""
-        return spaces.Dict(
-            {
-                "translation": spaces.Box(
-                    low=-1,
-                    high=1.0,
-                    shape=(2,),
-                ),
-            },
-        )
+        return np.append(normalized_optimal_action[:3], action[0])

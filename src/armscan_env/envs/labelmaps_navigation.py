@@ -47,7 +47,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
     :param termination_criterion: if None, no termination criterion will be used
     :param slice_shape: determines the shape of the 2D slices that will be used as observations
     :param max_episode_len: maximum number of steps in an episode
-    :param angle_bounds: bounds for the rotation angles in degrees
+    :param rotation_bounds: bounds for the rotation angles in degrees
     :param translation_bounds: bounds for the translation in mm. If None, the bound will be computed from the volume size.
     :param render_mode: determines how the environment will be rendered. Allowed values: "plt", "animation"
     :param seed: seed for the random number generator
@@ -65,7 +65,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         termination_criterion: TerminationCriterion | None = LabelmapEnvTerminationCriterion(),
         slice_shape: tuple[int, int] | None = None,
         max_episode_len: int | None = None,
-        angle_bounds: tuple[float, float] = (180, 180),
+        rotation_bounds: tuple[float, float] = (180, 180),
         translation_bounds: tuple[float | None, float | None] = (None, None),
         render_mode: Literal["plt", "animation"] | None = None,
         seed: int | None = DEFAULT_SEED,
@@ -86,8 +86,8 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         self._cur_labelmap_name: str | None = None
         self._cur_labelmap_volume: sitk.Image | None = None
 
-        self.user_defined_bounds = angle_bounds, translation_bounds
-        self.angle_bounds = angle_bounds
+        self.user_defined_bounds = rotation_bounds, translation_bounds
+        self.rotation_bounds = rotation_bounds
         self.translation_bounds = translation_bounds
 
         self.render_mode = render_mode
@@ -104,7 +104,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         """
         return ManipulatorAction.from_normalized_array(
             action,
-            self.angle_bounds,
+            self.rotation_bounds,
             self.translation_bounds,
         )
 
@@ -190,8 +190,8 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         if self.cur_labelmap_volume is None:
             raise RuntimeError("The labelmap volume must not be None, did you call reset?")
         volume = self.cur_labelmap_volume
-        size = volume.GetSize()
-        spacing = volume.GetSpacing()
+        size = np.array((volume.GetSize()[2], volume.GetSize()[0]))
+        spacing = np.array((volume.GetSpacing()[2], volume.GetSpacing()[0]))
         bounds = list(self.translation_bounds)
         for i in range(2):
             if bounds[i] is None:
@@ -206,7 +206,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         action: np.ndarray | ManipulatorAction,
     ) -> tuple[TObs, float, bool, bool, dict[str, Any]]:
         if isinstance(action, ManipulatorAction):
-            action = action.to_normalized_array(self.angle_bounds, self.translation_bounds)
+            action = action.to_normalized_array(self.rotation_bounds, self.translation_bounds)
         return super().step(action)
 
     def reset(
@@ -223,7 +223,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         if reset_slice_shape:
             self._slice_shape = None
         # Remove the seed from kwargs if it exists
-        kwargs.pop('seed', None)
+        kwargs.pop("seed", None)
         obs, info = super().reset(seed=self._seed, **kwargs)
         return obs, info
 

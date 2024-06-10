@@ -1,7 +1,8 @@
 # Borrow a lot from openai baselines:
 # https://github.com/openai/baselines/blob/master/baselines/common/atari_wrappers.py
 import logging
-from typing import Any, Literal
+from abc import ABC, abstractmethod
+from typing import Any, Literal, SupportsFloat, cast
 
 import gymnasium as gym
 import numpy as np
@@ -14,7 +15,8 @@ from armscan_env.envs.labelmaps_navigation import (
 from armscan_env.envs.observations import MultiBoxSpace
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
 from armscan_env.envs.state_action import LabelmapStateAction, ManipulatorAction
-from gymnasium import ActionWrapper, Env
+from gymnasium import Env, Wrapper
+from gymnasium.core import ActType, ObsType, WrapperActType
 from gymnasium.wrappers import FrameStackObservation
 
 from tianshou.highlevel.env import (
@@ -95,7 +97,7 @@ class ArmscanEnvFactory(EnvFactory):
         """
         return dict(self.make_kwargs)
 
-    def create_env(self, mode: EnvMode) -> Env:
+    def create_env(self, mode: EnvMode) -> LabelmapEnv:
         """Creates a single environment for the given mode.
 
         :return: an environment
@@ -118,7 +120,7 @@ class ArmscanEnvFactory(EnvFactory):
                 raise ValueError(
                     "optimal_action must be provided when project_to_x_translation is True",
                 )
-            env = LinearSweepWrapper(env, self.optimal_action)
+            env = LinearSweepWrapper(env)
 
         if self.n_stack > 1:
             env = FrameStackObservation(env, self.n_stack)
@@ -127,16 +129,45 @@ class ArmscanEnvFactory(EnvFactory):
         return env
 
 
-class LinearSweepWrapper(ActionWrapper):
-    def __init__(self, env: LabelmapEnv, optimal_action: ManipulatorAction) -> None:
+# Todo: Issue on gymnasyum for not overwriting reset method
+class PatchedWrapper(Wrapper[np.ndarray, float, np.ndarray, np.ndarray]):
+    def __init__(self, env: LabelmapEnv | Env):
+        super().__init__(env)
+        # Helps with IDE autocompletion
+        self.env = cast(LabelmapEnv, env)
+
+    def reset(self, **kwargs: Any) -> tuple[np.ndarray, dict[str, Any]]:
+        return self.env.reset(**kwargs)
+
+    def __getattr__(self, item: str) -> Any:
+        return getattr(self.env, item)
+
+
+class PatchedActionWrapper(PatchedWrapper, ABC):
+    def __init__(self, env: Env[ObsType, ActType]):
+        super().__init__(env)
+
+    def step(
+        self,
+        action: WrapperActType,
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+        return self.env.step(self.action(action))  # type: ignore
+
+    @abstractmethod
+    def action(self, action: WrapperActType) -> np.ndarray:
+        pass
+
+
+class LinearSweepWrapper(PatchedActionWrapper):
+    def __init__(self, env: LabelmapEnv) -> None:
         super().__init__(env)
         self.env: LabelmapEnv = env
         self.action_space = gym.spaces.Box(-1.0, 1.0, shape=(1,))
-        self.optimal_action = optimal_action
 
-    def action(self, action: np.ndarray) -> np.ndarray:
-        normalized_optimal_action = self.optimal_action.to_normalized_array(
+    def action(self, action: WrapperActType) -> np.ndarray:
+        action = np.array(action)
+        normalized_optimal_action = self.env.get_optimal_action().to_normalized_array(
             self.env.rotation_bounds,
             self.env.translation_bounds,
         )
-        return np.append(normalized_optimal_action[:3], action[0])
+        return np.append(normalized_optimal_action[:3], action)

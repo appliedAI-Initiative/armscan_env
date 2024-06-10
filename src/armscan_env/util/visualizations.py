@@ -82,7 +82,7 @@ def show_cluster_centers(
     for tissue_label in TissueLabel:
         for data in tissue_clusters.get_cluster_for_label(tissue_label):
             # plot clusters with different colors
-            ax.scatter(data.center[1], data.center[0], color="red", marker="*", s=20)
+            ax.scatter(data.center[0], data.center[1], color="red", marker="*", s=20)
 
         ax.imshow(slice, aspect=6, origin="lower")
     return ax
@@ -110,8 +110,8 @@ def show_clusters(
         for label, data in enumerate(tissue_clusters.get_cluster_for_label(tissue)):
             # plot clusters with different colors
             cluster_labels[tuple(np.array(data.cluster).T)] = (label + 1) * 10
-            ax.scatter(data.center[1], data.center[0], color="red", marker="*", s=20)
-    ax.imshow(cluster_labels, aspect=aspect, origin="lower")
+            ax.scatter(data.center[0], data.center[1], color="red", marker="*", s=20)
+    ax.imshow(cluster_labels.T, aspect=aspect, origin="lower")
     return ax
 
 
@@ -136,6 +136,6 @@ def show_only_clusters(
         for label, data in enumerate(tissue_clusters.get_cluster_for_label(tissue)):
             # plot clusters with different colors
             cluster_labels[tuple(np.array(data.cluster).T)] = (label + 1) * 10
-            ax.scatter(data.center[1], data.center[0], color="red", marker="*", s=20)
-    ax.imshow(cluster_labels, aspect=6, origin="lower")
+            ax.scatter(data.center[0], data.center[1], color="red", marker="*", s=20)
+    ax.imshow(cluster_labels.T, aspect=6, origin="lower")
     return ax

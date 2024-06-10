@@ -29,6 +29,12 @@ from matplotlib.figure import Figure
 log = logging.getLogger(__name__)
 
 
+_VOL_NAME_TO_OPTIMAL_ACTION = {
+    "1": ManipulatorAction(rotation=(19.3, 0.0), translation=(0.0, 140.0)),
+    "2": ManipulatorAction(rotation=(0.0, 0.0), translation=(0.0, 115.0)),
+}
+
+
 class LabelmapEnvTerminationCriterion(TerminationCriterion["LabelmapEnv"], ABC):
     def __init__(
         self,
@@ -95,6 +101,14 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         self._axes: tuple[plt.Axes, plt.Axes, plt.Axes, plt.Axes, plt.Axes] | None = None
         self._camera: Camera | None = None
 
+    def get_optimal_action(self) -> ManipulatorAction:
+        if self.cur_labelmap_name is None:
+            raise RuntimeError("The labelmap name must not be None, did you call reset?")
+        return _VOL_NAME_TO_OPTIMAL_ACTION[self.cur_labelmap_name]
+
+    def step_to_solution(self) -> None:
+        self.step(self.get_optimal_action())
+
     def unnormalize_rotation_translation(self, action: np.ndarray) -> ManipulatorAction:
         """Unnormalizes an array with values in the range [-1, 1] to the original range that is
         consumed by :func:`slice_volume`.
@@ -140,7 +154,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             x_trans=manipulator_action.translation[0],
             y_trans=manipulator_action.translation[1],
         )
-        return sitk.GetArrayFromImage(sliced_volume)[:, 0, :]
+        return sitk.GetArrayFromImage(sliced_volume)[:, 0, :].T
 
     def _get_initial_slice(self) -> np.ndarray:
         return self._get_slice_from_action(self._INITIAL_POS_ROTATION)
@@ -190,8 +204,8 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         if self.cur_labelmap_volume is None:
             raise RuntimeError("The labelmap volume must not be None, did you call reset?")
         volume = self.cur_labelmap_volume
-        size = np.array((volume.GetSize()[2], volume.GetSize()[0]))
-        spacing = np.array((volume.GetSpacing()[2], volume.GetSpacing()[0]))
+        size = volume.GetSize()
+        spacing = volume.GetSpacing()
         bounds = list(self.translation_bounds)
         for i in range(2):
             if bounds[i] is None:
@@ -281,7 +295,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
 
         # Subplot 2: from the side
         ix = volume.GetSize()[0] // 2
-        ax2.imshow(img_array[:, :, ix].T, aspect=0.24)
+        ax2.imshow(img_array[:, :, ix].T)
         z_dash = np.arange(img_array.shape[0])
         b_z = b + np.tan(np.deg2rad(rotation[0])) * ix
         y_dash_2 = np.tan(np.deg2rad(rotation[1])) * z_dash + b_z
@@ -290,14 +304,15 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
 
         # ACTION
         sliced_img = self.cur_state_action.labels_2d_slice
-        ax3.imshow(sliced_img, origin="lower", aspect=6)
+        ax3.imshow(sliced_img.T, origin="lower", aspect=6)
 
         txt = (
             "Slice taken at position:\n"
             f"y: {translation[1]:.2f} mm,\n"
             f"x: {translation[0]:.2f} mm,\n"
             f"rot_z: {rotation[0]:.2f} deg,\n"
-            f"rot_x: {rotation[1]:.2f} deg"
+            f"rot_x: {rotation[1]:.2f} deg\n"
+            f"terminated: {self.is_terminated}, truncated: {self.is_truncated}\n"
         )
         ax4.text(0.5, 0.5, txt, ha="center", va="center")
         ax4.axis("off")
@@ -313,7 +328,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         return fig
 
     def _create_figure_axis(self) -> None:
-        fig = plt.figure(constrained_layout=True, figsize=(9, 6))
+        fig = plt.figure(constrained_layout=True, figsize=(12, 9))
         gs = fig.add_gridspec(nrows=3, ncols=3)
 
         ax1 = fig.add_subplot(gs[:, 0])

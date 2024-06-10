@@ -92,7 +92,7 @@ class LabelmapClusteringBasedReward(RewardMetric[LabelmapStateAction]):
 
     def __init__(
         self,
-        n_landmarks: Sequence[int] = (5, 2, 1),
+        n_landmarks: Sequence[int] = (4, 2, 1),
     ):
         self.n_landmarks = n_landmarks
 

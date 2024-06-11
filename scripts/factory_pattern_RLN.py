@@ -3,9 +3,11 @@
 import os
 
 import SimpleITK as sitk
+from armscan_env.envs.labelmaps_navigation import LabelmapEnvTerminationCriterion
 from armscan_env.envs.observations import (
     LabelmapSliceAsChannelsObservation,
 )
+from armscan_env.envs.rewards import LabelmapClusteringBasedReward
 from armscan_env.network import ActorFactoryArmscanDQN
 from armscan_env.wrapper import ArmscanEnvFactory
 
@@ -24,35 +26,39 @@ volume_1 = sitk.ReadImage(path_to_labels_1)
 path_to_labels_2 = os.path.join("..", "data", "labels", "00002_labels.nii")
 volume_2 = sitk.ReadImage(path_to_labels_2)
 
-log_name = os.path.join("ppo", str(ExperimentConfig.seed), datetime_tag())
+log_name = os.path.join("ppo", str(ExperimentConfig.seed), "4_stack-lin_sweep_v1", datetime_tag())
 experiment_config = ExperimentConfig()
 
 # %%
 sampling_config = SamplingConfig(
-    num_epochs=100,
+    num_epochs=50,
     step_per_epoch=1000,
-    batch_size=25,
+    batch_size=80,
     num_train_envs=-1,
-    num_test_envs=10,
-    buffer_size=100,
-    step_per_collect=1000,
+    num_test_envs=1,
+    num_test_episodes=1,
+    buffer_size=1600,
+    step_per_collect=800,
 )
 
 volume_size = volume_1.GetSize()
 env_factory = ArmscanEnvFactory(
-    name2volume={"1": volume_1, "2": volume_2},
+    name2volume={"1": volume_1},
     observation=LabelmapSliceAsChannelsObservation(
-        slice_shape=(volume_size[2], volume_size[0]),
+        slice_shape=(volume_size[0], volume_size[2]),
         action_shape=(4,),
     ),
     slice_shape=(volume_size[0], volume_size[2]),
-    max_episode_len=5000,
-    angle_bounds=(90.0, 45.0),
+    max_episode_len=100,
+    rotation_bounds=(90.0, 45.0),
     translation_bounds=(0.0, None),
     render_mode="animation",
     seed=experiment_config.seed,
     venv_type=VectorEnvType.SUBPROC_SHARED_MEM_AUTO,
     n_stack=4,
+    project_to_x_translation=True,
+    termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.1),
+    reward_metric=LabelmapClusteringBasedReward(n_landmarks=(4, 2, 1))
 )
 
 builder = (

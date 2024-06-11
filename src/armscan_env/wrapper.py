@@ -65,7 +65,6 @@ class ArmscanEnvFactory(EnvFactory):
         seed: int | None = None,
         n_stack: int = 1,
         project_to_x_translation: bool = False,
-        optimal_action: ManipulatorAction | None = None,
         remove_rotation_actions: bool = False,
         **make_kwargs: Any,
     ) -> None:
@@ -86,7 +85,6 @@ class ArmscanEnvFactory(EnvFactory):
         self.seed = seed
         self.n_stack = n_stack
         self.project_to_x_translation = project_to_x_translation
-        self.optimal_action = optimal_action
         self.remove_rotation_actions = remove_rotation_actions
         self.make_kwargs = make_kwargs
 
@@ -116,10 +114,6 @@ class ArmscanEnvFactory(EnvFactory):
         )
 
         if self.project_to_x_translation:
-            if self.optimal_action is None:
-                raise ValueError(
-                    "optimal_action must be provided when project_to_x_translation is True",
-                )
             env = LinearSweepWrapper(env)
 
         if self.n_stack > 1:

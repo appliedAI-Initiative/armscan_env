@@ -1,5 +1,3 @@
-# %%
-
 import os
 
 import SimpleITK as sitk
@@ -20,7 +18,6 @@ from tianshou.highlevel.params.dist_fn import (
 from tianshou.highlevel.params.policy_params import PPOParams
 from tianshou.utils.logging import datetime_tag
 
-# %%
 path_to_labels_1 = os.path.join("..", "data", "labels", "00001_labels.nii")
 volume_1 = sitk.ReadImage(path_to_labels_1)
 path_to_labels_2 = os.path.join("..", "data", "labels", "00002_labels.nii")
@@ -29,10 +26,9 @@ volume_2 = sitk.ReadImage(path_to_labels_2)
 log_name = os.path.join("ppo", str(ExperimentConfig.seed), "4_stack-lin_sweep_v1", datetime_tag())
 experiment_config = ExperimentConfig()
 
-# %%
 sampling_config = SamplingConfig(
-    num_epochs=50,
-    step_per_epoch=1000,
+    num_epochs=500,
+    step_per_epoch=10000,
     batch_size=80,
     num_train_envs=-1,
     num_test_envs=1,
@@ -58,7 +54,7 @@ env_factory = ArmscanEnvFactory(
     n_stack=4,
     project_to_x_translation=True,
     termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.1),
-    reward_metric=LabelmapClusteringBasedReward(n_landmarks=(4, 2, 1))
+    reward_metric=LabelmapClusteringBasedReward(n_landmarks=(4, 2, 1)),
 )
 
 builder = (
@@ -86,5 +82,4 @@ builder = (
 )
 experiment = builder.build()
 
-# %%
 experiment.run(log_name)

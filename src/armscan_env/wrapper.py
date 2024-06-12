@@ -14,7 +14,7 @@ from armscan_env.envs.labelmaps_navigation import (
 )
 from armscan_env.envs.observations import MultiBoxSpace
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
-from armscan_env.envs.state_action import LabelmapStateAction, ManipulatorAction
+from armscan_env.envs.state_action import LabelmapStateAction
 from gymnasium import Env, Wrapper
 from gymnasium.core import ActType, ObsType, WrapperActType
 from gymnasium.wrappers import FrameStackObservation

@@ -1,3 +1,4 @@
 [submodule "tianshou"]
 	path = tianshou
-	url = git@github.com:thu-ml/tianshou.git
+	url = git@github.com:aai-institute/tianshou-fork.git
+	branch = armscan_env

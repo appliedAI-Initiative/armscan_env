@@ -159,7 +159,14 @@ class ActorFactoryArmscanDQN(ActorFactory):
             (c, h, w), (action_dim,), _ = envs.get_observation_shape()  # type: ignore
             n_stack = 1
         except BaseException:
-            ((n_stack, c, h, w), (_, action_dim,), _,) = envs.get_observation_shape()  # type: ignore # noqa
+            (
+                (n_stack, c, h, w),
+                (
+                    _,
+                    action_dim,
+                ),
+                _,
+            ) = envs.get_observation_shape()  # type: ignore
 
         net: DQN_MLP_Concat = DQN_MLP_Concat(
             c=c,

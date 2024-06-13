@@ -25,6 +25,10 @@ import os
 
 from accsr.config import ConfigProviderBase, DefaultDataConfiguration
 
+file_dir = os.path.dirname(__file__) if "__file__" in locals() else os.getcwd()
+
+top_level_directory: str = os.path.abspath(os.path.join(file_dir, os.pardir, os.pardir))
+
 
 class __Configuration(DefaultDataConfiguration):
     def get_labels_path(self, labelmap_number: int) -> str:
@@ -61,4 +65,4 @@ def get_config(reload: bool = False) -> __Configuration:
     """:param reload: if True, the configuration will be reloaded from the json files
     :return: the configuration instance
     """
-    return _config_provider.get_config(reload=reload)
+    return _config_provider.get_config(reload=reload, config_directory=top_level_directory)

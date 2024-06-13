@@ -182,7 +182,6 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             self.compute_translation_bounds()
         if self._slice_shape is None:
             self.compute_slice_shape(volume=self.cur_labelmap_volume)
-        # Alternatively, select a random slice
         initial_slice = self._get_initial_slice()
         return LabelmapStateAction(
             action=self._INITIAL_POS_ROTATION,

@@ -104,7 +104,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
     def get_optimal_action(self) -> ManipulatorAction:
         if self.cur_labelmap_name is None:
             raise RuntimeError("The labelmap name must not be None, did you call reset?")
-        return _VOL_NAME_TO_OPTIMAL_ACTION[self.cur_labelmap_name]
+        return copy(_VOL_NAME_TO_OPTIMAL_ACTION[self.cur_labelmap_name])
 
     def step_to_solution(self) -> None:
         self.step(self.get_optimal_action())
@@ -315,6 +315,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         )
         ax4.text(0.5, 0.5, txt, ha="center", va="center")
         ax4.axis("off")
+        ax4.text(0.5, 0.8, f"Step: {self.cur_episode_len}", ha="center", va="center")
 
         # OBSERVATION
         clusters = TissueClusters.from_labelmap_slice(self.cur_state_action.labels_2d_slice)

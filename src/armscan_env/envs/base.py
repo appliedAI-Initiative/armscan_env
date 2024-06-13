@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Generic, TypeVar
 
 import gymnasium as gym
@@ -215,7 +215,7 @@ class ModularEnv(gym.Env[TObs, TAction], Generic[TStateAction, TAction, TObs], A
         super().reset(seed=seed, **kwargs)
         self._cur_state_action = self.sample_initial_state()
         self._is_closed = False
-        self._cur_episode_len = 1
+        self._cur_episode_len = 0
         self._update_observation_reward_termination()
         assert self.cur_observation is not None
         return self.cur_observation, self.get_info_dict()
@@ -233,3 +233,44 @@ class ModularEnv(gym.Env[TObs, TAction], Generic[TStateAction, TAction, TObs], A
             self.is_truncated,
             self.get_info_dict(),
         )
+
+
+@dataclass(kw_only=True)
+class EnvRollout(Generic[TObs, TAction]):
+    observations: list[TObs] = field(default_factory=list)
+    rewards: list[float] = field(default_factory=list)
+    actions: list[TAction | None] = field(default_factory=list)
+    infos: list[dict[str, Any]] = field(default_factory=list)
+    terminated: list[bool] = field(default_factory=list)
+    truncated: list[bool] = field(default_factory=list)
+
+    def append_step(
+        self,
+        action: TAction,
+        observation: TObs,
+        reward: float,
+        info: dict[str, Any],
+        terminated: bool,
+        truncated: bool,
+    ) -> None:
+        self.observations.append(observation)
+        self.rewards.append(reward)
+        self.actions.append(action)
+        self.infos.append(info)
+        self.terminated.append(terminated)
+        self.truncated.append(truncated)
+
+    def append_reset(
+        self,
+        observation: TObs,
+        info: dict[str, Any],
+        reward: float = 0,
+        terminated: bool = False,
+        truncated: bool = False,
+    ) -> None:
+        self.observations.append(observation)
+        self.rewards.append(reward)
+        self.actions.append(None)
+        self.infos.append(info)
+        self.terminated.append(terminated)
+        self.truncated.append(truncated)

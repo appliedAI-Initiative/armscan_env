@@ -11,7 +11,7 @@ from typing import (
 import gymnasium as gym
 import numpy as np
 from armscan_env.clustering import TissueClusters, TissueLabel
-from armscan_env.envs.base import ArrayObservation, DictObservation, TStateAction
+from armscan_env.envs.base import ArrayObservation, DictObservation
 from armscan_env.envs.state_action import LabelmapStateAction
 from armscan_env.util.img_processing import crop_center
 
@@ -229,14 +229,26 @@ class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
     TODO: Implement this observation.
     """
 
-    def compute_observation(self, state: TStateAction) -> np.ndarray:
+    def compute_observation(self, state: LabelmapStateAction) -> np.ndarray:
         tissue_clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
-        return self.cluster_characteristics_array(tissue_cluster=tissue_clusters)
+        return np.concatenate(
+            self.cluster_characteristics_array(tissue_clusters=tissue_clusters).flatten(),
+            state.action,
+            state.last_reward,
+        )
 
     @staticmethod
-    def cluster_characteristics_array(tissue_cluster: TissueClusters) -> np.ndarray:
-        characteristics_array = np.zeros((3, 2))
-        characteristics_array[0, 0] = len(tissue_cluster.bones)
-        characteristics_array[1, 0] = len(tissue_cluster.tendons)
-        characteristics_array[2, 0] = len(tissue_cluster.ulnar)
-        return characteristics_array
+    def cluster_characteristics_array(tissue_clusters: TissueClusters) -> np.ndarray:
+        cluster_characteristics = []
+
+        for tissue_label in TissueLabel:
+            clusters = tissue_clusters.get_cluster_for_label(tissue_label)
+            num_points = 0
+            cluster_centers = []
+            for cluster in clusters:
+                num_points += len(cluster.datapoints)
+                cluster_centers.append(cluster.center)
+            clusters_center_mean = np.mean(np.array(cluster_centers), axis=0)
+            cluster_characteristics.append([len(clusters), num_points, clusters_center_mean])
+
+        return np.array(cluster_characteristics)

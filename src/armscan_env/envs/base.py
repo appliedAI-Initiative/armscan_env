@@ -14,7 +14,7 @@ class EnvPreconditionError(RuntimeError):
 
 @dataclass(kw_only=True)
 class StateAction:
-    action: Any
+    normalized_action_arr: Any
     # state of the env will be reflected by fields added to subclasses
     # but action is a reserved field name. Subclasses should override the
     # type of action to be more specific
@@ -249,16 +249,16 @@ class EnvRollout(Generic[TObs, TAction]):
         action: TAction,
         observation: TObs,
         reward: float,
-        info: dict[str, Any],
         terminated: bool,
         truncated: bool,
+        info: dict[str, Any],
     ) -> None:
         self.observations.append(observation)
         self.rewards.append(reward)
         self.actions.append(action)
-        self.infos.append(info)
         self.terminated.append(terminated)
         self.truncated.append(truncated)
+        self.infos.append(info)
 
     def append_reset(
         self,

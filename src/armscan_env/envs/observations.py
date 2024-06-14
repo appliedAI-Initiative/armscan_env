@@ -94,7 +94,11 @@ class LabelmapSliceAsChannelsObservation(DictObservation[LabelmapStateAction]):
         state: LabelmapStateAction,
     ) -> ChanneledLabelmapsObsWithActReward:
         """Return the observation as a dictionary of the type ChanneledLabelmapsObsWithActReward."""
-        return self.compute_from_slice(state.labels_2d_slice, state.action, state.last_reward)
+        return self.compute_from_slice(
+            state.labels_2d_slice,
+            state.normalized_action_arr,
+            state.last_reward,
+        )
 
     def compute_from_slice(
         self,
@@ -176,7 +180,11 @@ class LabelmapSliceObservation(DictObservation[LabelmapStateAction]):
         state: LabelmapStateAction,
     ) -> ChanneledLabelmapsObsWithActReward:
         """Return the observation as a dictionary of the type ChanneledLabelmapsObsWithActReward."""
-        return self.compute_from_slice(state.labels_2d_slice, state.action, state.last_reward)
+        return self.compute_from_slice(
+            state.labels_2d_slice,
+            state.normalized_action_arr,
+            state.last_reward,
+        )
 
     def compute_from_slice(
         self,

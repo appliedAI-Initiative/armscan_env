@@ -4,7 +4,6 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Literal, SupportsFloat, cast
 
-import gymnasium as gym
 import numpy as np
 import SimpleITK as sitk
 from armscan_env.envs.base import Observation, RewardMetric, TerminationCriterion
@@ -26,6 +25,12 @@ from tianshou.highlevel.env import (
 )
 
 log = logging.getLogger(__name__)
+
+
+class PatchedFrameStackObservation(FrameStackObservation):
+    def __init__(self, env: Env[ObsType, ActType], n_stack: int):
+        super().__init__(env, n_stack)
+        self.observation_space = MultiBoxSpace(self.observation_space)
 
 
 class ArmscanEnvFactory(EnvFactory):
@@ -64,7 +69,7 @@ class ArmscanEnvFactory(EnvFactory):
         venv_type: VectorEnvType = VectorEnvType.SUBPROC_SHARED_MEM_AUTO,
         seed: int | None = None,
         n_stack: int = 1,
-        project_to_x_translation: bool = False,
+        project_actions_to: Literal["x", "y", "xy"] | None = None,
         remove_rotation_actions: bool = False,
         **make_kwargs: Any,
     ) -> None:
@@ -84,7 +89,7 @@ class ArmscanEnvFactory(EnvFactory):
         }
         self.seed = seed
         self.n_stack = n_stack
-        self.project_to_x_translation = project_to_x_translation
+        self.project_actions_to = project_actions_to
         self.remove_rotation_actions = remove_rotation_actions
         self.make_kwargs = make_kwargs
 
@@ -111,19 +116,15 @@ class ArmscanEnvFactory(EnvFactory):
             translation_bounds=self.translation_bounds,
             render_mode=self.render_modes.get(mode),
             seed=self.seed,
+            project_actions_to=self.project_actions_to,
         )
 
-        if self.project_to_x_translation:
-            env = LinearSweepWrapper(env)
-
         if self.n_stack > 1:
-            env = FrameStackObservation(env, self.n_stack)
-            env.observation_space = MultiBoxSpace(env.observation_space)
-
+            env = PatchedFrameStackObservation(env, self.n_stack)
         return env
 
 
-# Todo: Issue on gymnasyum for not overwriting reset method
+# Todo: Issue on gymnasium for not overwriting reset method
 class PatchedWrapper(Wrapper[np.ndarray, float, np.ndarray, np.ndarray]):
     def __init__(self, env: LabelmapEnv | Env):
         super().__init__(env)
@@ -150,18 +151,3 @@ class PatchedActionWrapper(PatchedWrapper, ABC):
     @abstractmethod
     def action(self, action: WrapperActType) -> np.ndarray:
         pass
-
-
-class LinearSweepWrapper(PatchedActionWrapper):
-    def __init__(self, env: LabelmapEnv) -> None:
-        super().__init__(env)
-        self.env: LabelmapEnv = env
-        self.action_space = gym.spaces.Box(-1.0, 1.0, shape=(1,))
-
-    def action(self, action: WrapperActType) -> np.ndarray:
-        action = np.array(action)
-        normalized_optimal_action = self.env.get_optimal_action().to_normalized_array(
-            self.env.rotation_bounds,
-            self.env.translation_bounds,
-        )
-        return np.append(normalized_optimal_action[:3], action)

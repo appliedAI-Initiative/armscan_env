@@ -1,6 +1,7 @@
 import os
 
 import SimpleITK as sitk
+from armscan_env.config import get_config
 from armscan_env.envs.labelmaps_navigation import LabelmapEnvTerminationCriterion
 from armscan_env.envs.observations import LabelmapSliceAsChannelsObservation
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
@@ -17,10 +18,10 @@ from tianshou.highlevel.params.alpha import AutoAlphaFactoryDefault
 from tianshou.highlevel.params.policy_params import SACParams
 from tianshou.utils.logging import datetime_tag
 
-path_to_labels_1 = os.path.join("..", "data", "labels", "00001_labels.nii")
-volume_1 = sitk.ReadImage(path_to_labels_1)
-path_to_labels_2 = os.path.join("..", "data", "labels", "00002_labels.nii")
-volume_2 = sitk.ReadImage(path_to_labels_2)
+config = get_config()
+
+volume_1 = sitk.ReadImage(config.get_labels_path(1))
+volume_2 = sitk.ReadImage(config.get_labels_path(2))
 
 log_name = os.path.join("sac", str(ExperimentConfig.seed), datetime_tag())
 experiment_config = ExperimentConfig()
@@ -53,7 +54,6 @@ env_factory = ArmscanEnvFactory(
     seed=experiment_config.seed,
     venv_type=VectorEnvType.SUBPROC_SHARED_MEM_AUTO,
     n_stack=4,
-    project_to_x_translation=True,
     termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.1),
     reward_metric=LabelmapClusteringBasedReward(n_landmarks=(4, 2, 1)),
 )

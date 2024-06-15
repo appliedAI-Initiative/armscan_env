@@ -243,9 +243,12 @@ class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
     def compute_observation(self, state: LabelmapStateAction) -> np.ndarray:
         tissue_clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
         return np.concatenate(
-            self.cluster_characteristics_array(tissue_clusters=tissue_clusters).flatten(),
-            state.action,
-            state.last_reward,
+            (
+                self.cluster_characteristics_array(tissue_clusters=tissue_clusters).flatten(),
+                np.atleast_1d(state.normalized_action_arr),
+                np.atleast_1d(state.last_reward),
+            ),
+            axis=0,
         )
 
     def _compute_observation_space(
@@ -256,7 +259,7 @@ class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
             spaces=(
                 ("num_clusters", gym.spaces.Box(low=0, high=np.inf, shape=(3,))),
                 ("num_points", gym.spaces.Box(low=0, high=np.inf, shape=(3,))),
-                ("cluster_center_mean", gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,))),
+                ("cluster_center_mean", gym.spaces.Box(low=-np.inf, high=np.inf, shape=(6,))),
                 ("action", gym.spaces.Box(low=-1, high=1, shape=self.action_shape)),
                 ("reward", gym.spaces.Box(low=-1, high=0, shape=(1,))),
             ),
@@ -275,7 +278,9 @@ class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
                 num_points += len(cluster.datapoints)
                 cluster_centers.append(cluster.center)
             clusters_center_mean = np.mean(np.array(cluster_centers), axis=0)
-            cluster_characteristics.append([len(clusters), num_points, clusters_center_mean])
+            if np.any(np.isnan(clusters_center_mean)):
+                clusters_center_mean = np.zeros(2)
+            cluster_characteristics.append([len(clusters), num_points, *clusters_center_mean])
 
         return np.array(cluster_characteristics)
 

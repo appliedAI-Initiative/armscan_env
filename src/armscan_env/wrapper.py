@@ -4,6 +4,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Literal, SupportsFloat, cast
 
+import gymnasium as gym
 import numpy as np
 import SimpleITK as sitk
 from armscan_env.envs.base import Observation, RewardMetric, TerminationCriterion
@@ -30,7 +31,8 @@ log = logging.getLogger(__name__)
 class PatchedFrameStackObservation(FrameStackObservation):
     def __init__(self, env: Env[ObsType, ActType], n_stack: int):
         super().__init__(env, n_stack)
-        self.observation_space = MultiBoxSpace(self.observation_space)
+        if isinstance(self.observation_space, gym.spaces.Dict):
+            self.observation_space = MultiBoxSpace(self.observation_space)
 
 
 class ArmscanEnvFactory(EnvFactory):

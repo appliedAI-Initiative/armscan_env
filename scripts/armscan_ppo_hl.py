@@ -46,7 +46,7 @@ env_factory = ArmscanEnvFactory(
         action_shape=(4,),
     ),
     slice_shape=(volume_size[0], volume_size[2]),
-    max_episode_len=100,
+    max_episode_len=20,
     rotation_bounds=(90.0, 45.0),
     translation_bounds=(0.0, None),
     render_mode="animation",

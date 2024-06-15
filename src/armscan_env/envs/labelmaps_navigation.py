@@ -423,7 +423,8 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         # REWARD
         ax5.text(0, 0, f"Reward: {self.cur_reward:.2f}", fontsize=12, color="red")
 
-        fig.suptitle(title, x=0.2, y=0.95)
+        if fig is not None:
+            fig.suptitle(title, x=0.2, y=0.95)
 
         plt.close()
         return fig

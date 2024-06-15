@@ -237,6 +237,9 @@ class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
     TODO: Implement this observation.
     """
 
+    def __init__(self, action_shape: tuple[int]):
+        self.action_shape = action_shape
+
     def compute_observation(self, state: LabelmapStateAction) -> np.ndarray:
         tissue_clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
         return np.concatenate(
@@ -244,6 +247,21 @@ class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
             state.action,
             state.last_reward,
         )
+
+    def _compute_observation_space(
+        self,
+    ) -> gym.spaces.Box:
+        """Return the observation space as a Box, with the right bounds for each feature."""
+        DictObs = gym.spaces.Dict(
+            spaces=(
+                ("num_clusters", gym.spaces.Box(low=0, high=np.inf, shape=(3,))),
+                ("num_points", gym.spaces.Box(low=0, high=np.inf, shape=(3,))),
+                ("cluster_center_mean", gym.spaces.Box(low=-np.inf, high=np.inf, shape=(3,))),
+                ("action", gym.spaces.Box(low=-1, high=1, shape=self.action_shape)),
+                ("reward", gym.spaces.Box(low=-1, high=0, shape=(1,))),
+            ),
+        )
+        return cast(gym.spaces.Box, gym.spaces.flatten_space(DictObs))
 
     @staticmethod
     def cluster_characteristics_array(tissue_clusters: TissueClusters) -> np.ndarray:
@@ -260,3 +278,8 @@ class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
             cluster_characteristics.append([len(clusters), num_points, clusters_center_mean])
 
         return np.array(cluster_characteristics)
+
+    @property
+    def observation_space(self) -> gym.spaces.Box:
+        """Boolean 2-d array representing segregated labelmap slice."""
+        return self._compute_observation_space()

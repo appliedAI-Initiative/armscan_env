@@ -21,7 +21,7 @@ python = "^3.11"
 accsr = "^0.4.6"
 celluloid = "^0.2.0"
 ffmpeg = "^1.4"
-gymnasium = "1.0.0a2"
+gymnasium = { path = "./gymnasium", develop = true}
 jupyter = "^1.0.0"
 matplotlib = "^3.8.3"
 numpy = "^1"

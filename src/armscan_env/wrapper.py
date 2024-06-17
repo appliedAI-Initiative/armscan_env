@@ -152,6 +152,7 @@ class ArmscanEnvFactory(EnvFactory):
         self,
         name2volume: dict[str, sitk.Image],
         observation: Observation[LabelmapStateAction, Any],
+        # TODO: remove mutable default values, make a proper config-based factory (not urgent)
         reward_metric: RewardMetric[LabelmapStateAction] = LabelmapClusteringBasedReward(),
         termination_criterion: TerminationCriterion | None = LabelmapEnvTerminationCriterion(),
         slice_shape: tuple[int, int] | None = None,

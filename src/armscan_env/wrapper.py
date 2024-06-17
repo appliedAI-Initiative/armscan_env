@@ -69,7 +69,7 @@ class PatchedFrameStackObservation(Wrapper):
         if isinstance(padding_type, str) and (padding_type == "reset" or padding_type == "zero"):
             self.padding_value: ObsType = create_zero_array(env.observation_space)
         elif padding_type in env.observation_space:
-            self.padding_value = padding_type # type: ignore
+            self.padding_value = padding_type  # type: ignore
             padding_type = "_custom"
         else:
             if isinstance(padding_type, str):
@@ -106,10 +106,7 @@ class PatchedFrameStackObservation(Wrapper):
         )
         return updated_obs, reward, terminated, truncated, info
 
-    def reset(
-        self,
-        **kwargs: Any
-    ) -> tuple[ObsType, dict[str, Any]]:
+    def reset(self, **kwargs: Any) -> tuple[ObsType, dict[str, Any]]:
         obs, info = self.env.reset(**kwargs)
 
         if self.padding_type == "reset":

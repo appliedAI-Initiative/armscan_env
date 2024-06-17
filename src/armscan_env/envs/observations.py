@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from functools import cached_property
 from typing import (
     Any,
     Generic,
@@ -10,7 +11,7 @@ from typing import (
 
 import numpy as np
 from armscan_env.clustering import TissueClusters, TissueLabel
-from armscan_env.envs.base import ArrayObservation, DictObservation
+from armscan_env.envs.base import DictObservation
 from armscan_env.envs.rewards import anatomy_based_rwd
 from armscan_env.envs.state_action import LabelmapStateAction
 from armscan_env.util.img_processing import crop_center
@@ -237,59 +238,88 @@ class LabelmapSliceObservation(DictObservation[LabelmapStateAction]):
         return self._observation_space
 
 
-class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
-    """Observation for a flat array representation of a clustered labelmap slice.
+class ActionRewardDict(TypedDict):
+    action: np.ndarray
+    reward: np.ndarray
 
-    The observation contains meaningful characteristics of the slice, as well as the last actions and rewards
-    (the past actions are useful if observations are stacked, which is usually the case).
+
+class ClusteringCharsDict(TypedDict):
+    num_clusters: np.ndarray
+    num_points: np.ndarray
+    cluster_center_mean: np.ndarray
+
+
+class ClusterObservationDict(ClusteringCharsDict, ActionRewardDict):
+    pass
+
+
+class ActionRewardObservation(DictObservation[LabelmapStateAction]):
+    """Observation containing (normalized) action and a computed `reward`.
+
+    The reward is not extracted from the environment, but computed from the state.
+    Thus, it could in principle be any scalar value, not necessarily a reward.
     """
 
     def __init__(self, action_shape: tuple[int] = (4,)):
         # TODO: don't add actions here, instead add in a separate ObservationWrapper. Not urgent
-        self.action_shape = action_shape
+        self._action_shape = action_shape
 
-    def compute_observation(self, state: LabelmapStateAction) -> np.ndarray:
-        tissue_clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
+    @property
+    def action_shape(self) -> tuple[int]:
+        return self._action_shape
 
-        clustering_reward = anatomy_based_rwd(tissue_clusters=tissue_clusters)
-
-        return np.concatenate(
-            (
-                self.cluster_characteristics_array(tissue_clusters=tissue_clusters).flatten(),
-                np.atleast_1d(state.normalized_action_arr),
-                np.atleast_1d(clustering_reward),
-            ),
-            axis=0,
-        )
-
-    def _compute_observation_space(
-        self,
-    ) -> gym.spaces.Box:
-        """Return the observation space as a Box, with the right bounds for each feature."""
-        DictObs = gym.spaces.Dict(
+    @cached_property
+    def observation_space(self) -> gym.spaces.Dict:
+        return gym.spaces.Dict(
             spaces=(
-                ("num_clusters", gym.spaces.Box(low=0, high=np.inf, shape=(3,))),
-                ("num_points", gym.spaces.Box(low=0, high=np.inf, shape=(3,))),
-                ("cluster_center_mean", gym.spaces.Box(low=-np.inf, high=np.inf, shape=(6,))),
                 ("action", gym.spaces.Box(low=-1, high=1, shape=self.action_shape)),
                 ("reward", gym.spaces.Box(low=-1, high=0, shape=(1,))),
             ),
         )
-        return cast(gym.spaces.Box, gym.spaces.flatten_space(DictObs))
 
-    @staticmethod
-    def cluster_characteristics_array(tissue_clusters: TissueClusters) -> np.ndarray:
+    def compute_observation(self, state: LabelmapStateAction) -> ActionRewardDict:
+        tissue_clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
+
+        clustering_reward = anatomy_based_rwd(tissue_clusters=tissue_clusters)
+
+        return {
+            "action": state.normalized_action_arr,
+            "reward": np.array([clustering_reward], dtype=np.float32),
+        }
+
+
+class LabelmapClusterObservation(DictObservation[LabelmapStateAction]):
+    """Observation for a flat array representation of a clustered labelmap slice."""
+
+    @cached_property
+    def observation_space(self) -> gym.spaces.Dict:
+        return gym.spaces.Dict(
+            spaces=(
+                ("num_clusters", gym.spaces.Box(low=0, high=np.inf, shape=(len(TissueLabel),))),
+                ("num_points", gym.spaces.Box(low=0, high=np.inf, shape=(len(TissueLabel),))),
+                (
+                    "cluster_center_mean",
+                    gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2 * len(TissueLabel),)),
+                ),
+            ),
+        )
+
+    def compute_observation(self, state: LabelmapStateAction) -> ClusteringCharsDict:
         """At the moment returns an array of len 3x4.
 
         The result is: `(num_clusters, num_points in all clusters, cluster_center_mean_x, cluster_center_mean_y)`
         for each tissue type, where values are zero if there are no clusters.
         """
-        cluster_characteristics = []
+        tissue_clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
 
-        for tissue_label in TissueLabel:
+        tissues_num_points = np.zeros(len(TissueLabel), dtype=int)
+        tissues_num_clusters = np.zeros(len(TissueLabel), dtype=int)
+        tissues_cluster_centers = np.zeros((len(TissueLabel), 2), dtype=float)
+        for i, tissue_label in enumerate(TissueLabel):
             clusters = tissue_clusters.get_cluster_for_label(tissue_label)
             num_points = 0
             num_clusters = len(clusters)
+
             if num_clusters > 0:
                 cluster_centers = []
                 for cluster in clusters:
@@ -297,12 +327,15 @@ class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
                     cluster_centers.append(cluster.center)
                 clusters_center_mean = np.mean(np.array(cluster_centers), axis=0)
             else:
-                clusters_center_mean = np.zeros(2)
-            cluster_characteristics.append([len(clusters), num_points, *clusters_center_mean])
+                clusters_center_mean = np.zeros(2, dtype=float)
 
-        return np.array(cluster_characteristics)
+            tissues_num_points[i] = num_points
+            tissues_num_clusters[i] = num_clusters
+            tissues_cluster_centers[i] = clusters_center_mean
 
-    @property
-    def observation_space(self) -> gym.spaces.Box:
-        """Boolean 2-d array representing segregated labelmap slice."""
-        return self._compute_observation_space()
+        # keep in sync with observation_space
+        return {
+            "num_clusters": tissues_num_clusters,
+            "num_points": tissues_num_points,
+            "cluster_center_mean": tissues_cluster_centers.flatten(),
+        }

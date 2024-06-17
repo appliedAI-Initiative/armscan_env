@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, Generic, TypeVar
+from functools import cached_property
+from typing import Any, Generic, Self, TypeVar, cast
 
 import numpy as np
 
@@ -59,12 +60,90 @@ class Observation(Generic[TStateAction, TObs], ABC):
         pass
 
 
+class ArrayObservation(Observation[TStateAction, np.ndarray], Generic[TStateAction], ABC):
+    pass
+
+    @property
+    @abstractmethod
+    def observation_space(self) -> gym.spaces.Box:
+        pass
+
+
 class DictObservation(Observation[TStateAction, dict[str, np.ndarray]], Generic[TStateAction], ABC):
     pass
 
+    def to_array_observation(self) -> ArrayObservation[TStateAction]:
+        return ArrayFromDictObservation(self)
 
-class ArrayObservation(Observation[TStateAction, np.ndarray], Generic[TStateAction], ABC):
-    pass
+    @property
+    @abstractmethod
+    def observation_space(self) -> gym.spaces.Dict:
+        pass
+
+    def merged_with(self, other: Self) -> 'MergedDictObservation[TStateAction]':
+        return MergedDictObservation([self, other])
+
+
+class ConcatenatedArrayObservation(ArrayObservation[TStateAction], Generic[TStateAction]):
+    def __init__(self, array_observations: list[ArrayObservation[TStateAction]]):
+        self.array_observations = array_observations
+
+    def compute_observation(self, state: TStateAction) -> np.ndarray:
+        return np.concatenate(
+            [obs.compute_observation(state) for obs in self.array_observations], axis=0,
+        )
+
+    @cached_property
+    def observation_space(self) -> gym.spaces.Box:
+        return gym.spaces.Box(
+            low=np.concatenate(
+                [obs.observation_space.low for obs in self.array_observations], axis=0,
+            ),
+            high=np.concatenate(
+                [obs.observation_space.high for obs in self.array_observations], axis=0,
+            ),
+        )
+
+
+class MergedDictObservation(DictObservation[TStateAction], Generic[TStateAction]):
+    def __init__(self, dict_observations: list[DictObservation[TStateAction]]):
+        self._dict_observations = dict_observations
+
+        self._merged_obs_dict: dict[str, gym.spaces.Box] = {}
+        for obs in dict_observations:
+            if duplicate_keys := self._merged_obs_dict.keys() & obs.observation_space.keys():
+                raise ValueError(f"Duplicate keys found in observation spaces: {duplicate_keys}")
+            self._merged_obs_dict.update(obs.observation_space.spaces)
+
+    @property
+    def dict_observations(self) -> list[DictObservation[TStateAction]]:
+        return self._dict_observations
+
+    def compute_observation(self, state: TStateAction) -> dict[str, np.ndarray]:
+        result = {}
+        for obs in self.dict_observations:
+            result.update(obs.compute_observation(state))
+        return result
+
+    @cached_property
+    def observation_space(self) -> gym.spaces.Dict:
+        return gym.spaces.Dict(spaces=self._merged_obs_dict)
+
+
+class ArrayFromDictObservation(ArrayObservation[TStateAction], Generic[TStateAction]):
+    def __init__(self, dict_observation: DictObservation[TStateAction]):
+        self.dict_observation = dict_observation
+
+    def compute_observation(self, state: TStateAction) -> np.ndarray:
+        result_dict = self.dict_observation.compute_observation(state)
+        return np.concatenate(list(result_dict.values()), axis=0)
+
+    @cached_property
+    def observation_space(self) -> gym.spaces.Box:
+        return cast(
+            gym.spaces.Box,
+            gym.spaces.flatten_space(self.dict_observation.observation_space),
+        )
 
 
 @dataclass(kw_only=True)

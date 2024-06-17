@@ -42,11 +42,11 @@ class MultiBoxSpace(gym.spaces.Dict, Generic[TDict]):
     """
 
     def __init__(self, name2box: dict[str, gym.spaces.Box] | gym.spaces.Dict):
-        super().__init__(spaces=name2box)  # type: ignore
-        self.spaces = name2box  # type: ignore
+        super().__init__(spaces=name2box)
+        self.spaces = name2box
 
     @property
-    def shape(self) -> list[Sequence[int]]:  # type: ignore # ToDo: improve Tianshou Space.shape
+    def shape(self) -> list[Sequence[int]]:
         """Return the shape of the space as an immutable property.
         This is a special handling.
         """
@@ -59,9 +59,9 @@ class MultiBoxSpace(gym.spaces.Dict, Generic[TDict]):
     @property
     def name2box(self) -> dict[str, gym.spaces.Box]:
         """Dictionary of the name of the observation space and the Box space."""
-        return self.spaces  # type: ignore
+        return self.spaces
 
-    def sample(self, mask: dict[str, Any] | None = None) -> TDict:  # type: ignore # signature expects dict[str, Any]
+    def sample(self, mask: dict[str, Any] | None = None) -> TDict:
         return cast(TDict, super().sample(mask=mask))
 
 

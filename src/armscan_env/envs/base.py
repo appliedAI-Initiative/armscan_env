@@ -5,8 +5,9 @@ from typing import Any, Generic, TypeVar
 import numpy as np
 
 import gymnasium as gym
-from gymnasium.core import ActType as TAction
-from gymnasium.core import ObsType as TObs
+
+TObs = TypeVar("TObs")
+TAction = TypeVar("TAction")
 
 
 class EnvPreconditionError(RuntimeError):
@@ -78,7 +79,7 @@ class EnvStatus(Generic[TStateAction, TObs]):
     info: dict[str, Any]
 
 
-class ModularEnv(gym.Env[TObs, TAction], Generic[TStateAction, TAction, TObs], ABC):
+class ModularEnv(gym.core.Env[TObs, TAction], Generic[TStateAction, TAction, TObs], ABC):
     def __init__(
         self,
         reward_metric: RewardMetric[TStateAction],
@@ -141,11 +142,11 @@ class ModularEnv(gym.Env[TObs, TAction], Generic[TStateAction, TAction, TObs], A
 
     @property
     @abstractmethod
-    def action_space(self) -> gym.spaces.Space[TAction]:  # type: ignore
+    def action_space(self) -> gym.spaces.Space[TAction]:
         pass
 
     @property
-    def observation_space(self) -> gym.spaces.Space[TObs]:  # type: ignore
+    def observation_space(self) -> gym.spaces.Space[TObs]:
         return self.observation.observation_space
 
     def close(self) -> None:

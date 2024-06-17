@@ -24,8 +24,9 @@ from matplotlib.animation import ArtistAnimation
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
 
-import gymnasium as gym
+from gymnasium import logger as gym_logger  # type: ignore[attr-defined]
 from gymnasium.core import ObsType as TObs
+from gymnasium.spaces import Box, Space
 
 log = logging.getLogger(__name__)
 
@@ -165,9 +166,9 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         return self._cur_labelmap_volume
 
     @property
-    def action_space(self) -> gym.spaces.Space[np.ndarray]:
+    def action_space(self) -> Space[np.ndarray]:
         action_dim = len(self._get_projected_action_arr_idx())
-        return gym.spaces.Box(low=-1, high=1, shape=(action_dim,), dtype=np.float32)
+        return Box(low=-1, high=1, shape=(action_dim,), dtype=np.float32)
 
     def close(self) -> None:
         super().close()
@@ -344,7 +345,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
                 camera.snap()
                 return camera
             case None:
-                gym.logger.warn(
+                gym_logger.warn(
                     "You are calling render method without having specified any render mode. "
                     "You can specify the render_mode at initialization, "
                     f'e.g. gym.make("{self.spec.id}", render_mode="rgb_array")',

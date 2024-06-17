@@ -2,7 +2,7 @@
 # https://github.com/openai/baselines/blob/master/baselines/common/atari_wrappers.py
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Literal, SupportsFloat, cast
+from typing import Any, Literal, SupportsFloat, TypeVar, cast
 
 import numpy as np
 import SimpleITK as sitk
@@ -15,9 +15,8 @@ from armscan_env.envs.observations import MultiBoxSpace
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
 from armscan_env.envs.state_action import LabelmapStateAction
 
-import gymnasium as gym
-from gymnasium import Env, Wrapper
-from gymnasium.core import ActType, ObsType, WrapperActType
+from gymnasium.core import Env, Wrapper
+from gymnasium.spaces import Dict as DictSpace
 from gymnasium.wrappers import FrameStackObservation
 from tianshou.highlevel.env import (
     EnvFactory,
@@ -25,14 +24,17 @@ from tianshou.highlevel.env import (
     VectorEnvType,
 )
 
+ObsType = TypeVar("ObsType")
+ActType = TypeVar("ActType")
+
 log = logging.getLogger(__name__)
 
 
 class PatchedFrameStackObservation(FrameStackObservation):
     def __init__(self, env: Env[ObsType, ActType], n_stack: int):
         super().__init__(env, n_stack)
-        if isinstance(self.observation_space, gym.spaces.Dict):
-            self.observation_space = MultiBoxSpace(self.observation_space)
+        if isinstance(self.observation_space, DictSpace):  # type: ignore
+            self.observation_space = MultiBoxSpace(self.observation_space)  # type: ignore
 
 
 class ArmscanEnvFactory(EnvFactory):
@@ -146,10 +148,10 @@ class PatchedActionWrapper(PatchedWrapper, ABC):
 
     def step(
         self,
-        action: WrapperActType,
+        action: ActType,
     ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
-        return self.env.step(self.action(action))  # type: ignore
+        return self.env.step(self.action(action))
 
     @abstractmethod
-    def action(self, action: WrapperActType) -> np.ndarray:
+    def action(self, action: ActType) -> np.ndarray:
         pass

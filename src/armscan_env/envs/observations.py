@@ -232,9 +232,10 @@ class LabelmapSliceObservation(DictObservation[LabelmapStateAction]):
 
 
 class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
-    """Observation space for an array representation of a clustered labelmap slice.
-    The array should contain the meaningful characteristics of the slice.
-    TODO: Implement this observation.
+    """Observation for a flat array representation of a clustered labelmap slice.
+
+    The observation contains meaningful characteristics of the slice, as well as the last actions and rewards
+    (the past actions are useful if observations are stacked, which is usually the case).
     """
 
     def __init__(self, action_shape: tuple[int]):

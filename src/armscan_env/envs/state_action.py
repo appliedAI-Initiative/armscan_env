@@ -80,7 +80,7 @@ class ManipulatorAction:
 @dataclass(kw_only=True)
 class LabelmapStateAction(StateAction):
     normalized_action_arr: np.ndarray
-    """Array of shape (4,) representing two angles and two translations"""
+    """Flat normalized array representing a subset (projection) of two angles and two translations."""
     labels_2d_slice: np.ndarray
     """Two-dimensional slice of the labelmap, i.e., an array of shape (N, M) with integer values.
     Each integer represents a different label (bone, nerve, etc.)"""

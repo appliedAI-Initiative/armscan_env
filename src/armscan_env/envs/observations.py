@@ -11,7 +11,7 @@ from typing import (
 import gymnasium as gym
 import numpy as np
 from armscan_env.clustering import TissueClusters, TissueLabel
-from armscan_env.envs.base import ArrayObservation, DictObservation, TStateAction
+from armscan_env.envs.base import ArrayObservation, DictObservation
 from armscan_env.envs.state_action import LabelmapStateAction
 from armscan_env.util.img_processing import crop_center
 
@@ -237,14 +237,54 @@ class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
     TODO: Implement this observation.
     """
 
-    def compute_observation(self, state: TStateAction) -> np.ndarray:
+    def __init__(self, action_shape: tuple[int]):
+        self.action_shape = action_shape
+
+    def compute_observation(self, state: LabelmapStateAction) -> np.ndarray:
         tissue_clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
-        return self.cluster_characteristics_array(tissue_cluster=tissue_clusters)
+        return np.concatenate(
+            (
+                self.cluster_characteristics_array(tissue_clusters=tissue_clusters).flatten(),
+                np.atleast_1d(state.normalized_action_arr),
+                np.atleast_1d(state.last_reward),
+            ),
+            axis=0,
+        )
+
+    def _compute_observation_space(
+        self,
+    ) -> gym.spaces.Box:
+        """Return the observation space as a Box, with the right bounds for each feature."""
+        DictObs = gym.spaces.Dict(
+            spaces=(
+                ("num_clusters", gym.spaces.Box(low=0, high=np.inf, shape=(3,))),
+                ("num_points", gym.spaces.Box(low=0, high=np.inf, shape=(3,))),
+                ("cluster_center_mean", gym.spaces.Box(low=-np.inf, high=np.inf, shape=(6,))),
+                ("action", gym.spaces.Box(low=-1, high=1, shape=self.action_shape)),
+                ("reward", gym.spaces.Box(low=-1, high=0, shape=(1,))),
+            ),
+        )
+        return cast(gym.spaces.Box, gym.spaces.flatten_space(DictObs))
 
     @staticmethod
-    def cluster_characteristics_array(tissue_cluster: TissueClusters) -> np.ndarray:
-        characteristics_array = np.zeros((3, 2))
-        characteristics_array[0, 0] = len(tissue_cluster.bones)
-        characteristics_array[1, 0] = len(tissue_cluster.tendons)
-        characteristics_array[2, 0] = len(tissue_cluster.ulnar)
-        return characteristics_array
+    def cluster_characteristics_array(tissue_clusters: TissueClusters) -> np.ndarray:
+        cluster_characteristics = []
+
+        for tissue_label in TissueLabel:
+            clusters = tissue_clusters.get_cluster_for_label(tissue_label)
+            num_points = 0
+            cluster_centers = []
+            for cluster in clusters:
+                num_points += len(cluster.datapoints)
+                cluster_centers.append(cluster.center)
+            clusters_center_mean = np.mean(np.array(cluster_centers), axis=0)
+            if np.any(np.isnan(clusters_center_mean)):
+                clusters_center_mean = np.zeros(2)
+            cluster_characteristics.append([len(clusters), num_points, *clusters_center_mean])
+
+        return np.array(cluster_characteristics)
+
+    @property
+    def observation_space(self) -> gym.spaces.Box:
+        """Boolean 2-d array representing segregated labelmap slice."""
+        return self._compute_observation_space()

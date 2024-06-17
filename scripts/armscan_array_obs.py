@@ -3,9 +3,10 @@ import os
 import SimpleITK as sitk
 from armscan_env.config import get_config
 from armscan_env.envs.labelmaps_navigation import LabelmapEnvTerminationCriterion
-from armscan_env.envs.observations import LabelmapSliceAsChannelsObservation
+from armscan_env.envs.observations import (
+    LabelmapClusterObservation,
+)
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
-from armscan_env.network import ActorFactoryArmscanDQN
 from armscan_env.wrapper import ArmscanEnvFactory
 
 from tianshou.highlevel.config import SamplingConfig
@@ -27,32 +28,29 @@ log_name = os.path.join("sac", str(ExperimentConfig.seed), datetime_tag())
 experiment_config = ExperimentConfig()
 
 sampling_config = SamplingConfig(
-    num_epochs=200,
-    step_per_epoch=5000,
+    num_epochs=10,
+    step_per_epoch=100,
     num_train_envs=1,
-    num_test_envs=10,
-    buffer_size=1000000,
+    num_test_envs=1,
+    buffer_size=1000,
     batch_size=256,
     step_per_collect=1,
     update_per_step=1,
-    start_timesteps=10000,
+    start_timesteps=0,
     start_timesteps_random=True,
 )
 
 volume_size = volume_1.GetSize()
 env_factory = ArmscanEnvFactory(
     name2volume={"1": volume_1},
-    observation=LabelmapSliceAsChannelsObservation(
-        slice_shape=(volume_size[0], volume_size[2]),
-        action_shape=(4,),
-    ),
+    observation=LabelmapClusterObservation(action_shape=(4,)),
     slice_shape=(volume_size[0], volume_size[2]),
-    max_episode_len=100,
+    max_episode_len=20,
     rotation_bounds=(90.0, 45.0),
     translation_bounds=(0.0, None),
     render_mode="animation",
     seed=experiment_config.seed,
-    venv_type=VectorEnvType.SUBPROC_SHARED_MEM_AUTO,
+    venv_type=VectorEnvType.DUMMY,
     n_stack=4,
     termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.1),
     reward_metric=LabelmapClusteringBasedReward(n_landmarks=(4, 2, 1)),
@@ -71,8 +69,12 @@ experiment = (
             critic2_lr=1e-3,
         ),
     )
-    .with_actor_factory(ActorFactoryArmscanDQN())
-    .with_common_critic_factory_use_actor()
+    .with_actor_factory_default(
+        (256, 256),
+        continuous_unbounded=True,
+        continuous_conditioned_sigma=True,
+    )
+    .with_common_critic_factory_default((256, 256))
     .build()
 )
 

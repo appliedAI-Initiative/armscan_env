@@ -49,9 +49,9 @@ def anatomy_based_rwd(
         bones_centers_mean = np.mean(bones_centers, axis=0)
         log.debug(f"{bones_centers_mean=}")
 
-        ligament_centers = np.array([cluster.center for cluster in tissue_clusters.tendons])
-        ligament_centers_mean = np.mean(ligament_centers, axis=0)
-        log.debug(f"{ligament_centers_mean=}")
+        tendons_centers = np.array([cluster.center for cluster in tissue_clusters.tendons])
+        tendons_centers_mean = np.mean(tendons_centers, axis=0)
+        log.debug(f"{tendons_centers_mean=}")
 
         # There must be only one ulnar tissue so there is no need to take the mean
         ulnar_center = tissue_clusters.ulnar[0].center
@@ -59,13 +59,13 @@ def anatomy_based_rwd(
 
         # Check the orientation of the arm:
         # The bones center might be over or under the tendons center depending on the origin
-        orientation = (bones_centers_mean[0] - ligament_centers_mean[0]) // abs(
-            bones_centers_mean[0] - ligament_centers_mean[0],
+        orientation = (bones_centers_mean[0] - tendons_centers_mean[0]) // abs(
+            bones_centers_mean[0] - tendons_centers_mean[0],
         )
         log.debug(f"{orientation=}")
 
         # Ulnar artery must be under tendons in the positive orientation:
-        if orientation * ulnar_center[0] < orientation * ligament_centers_mean[0]:
+        if orientation * ulnar_center[0] < orientation * tendons_centers_mean[0]:
             location_loss = 0
         else:
             log.debug("Ulnar center not where expected")

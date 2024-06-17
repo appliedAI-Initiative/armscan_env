@@ -34,7 +34,7 @@ class TissueLabel(Enum):
 class DataCluster:
     """Data class for a cluster of a tissue in a slice."""
 
-    cluster: list[tuple[float, float]] | np.ndarray
+    datapoints: list[tuple[float, float]] | np.ndarray
     center: tuple[np.floating[Any], np.floating[Any]]
 
 
@@ -93,7 +93,7 @@ def find_clusters(tissue_value: int, slice: np.ndarray) -> list[DataCluster]:
 
         cluster_list.append(
             DataCluster(
-                cluster=list(zip(cluster_indices[0], cluster_indices[1], strict=True)),
+                datapoints=list(zip(cluster_indices[0], cluster_indices[1], strict=True)),
                 center=center,
             ),
         )
@@ -152,6 +152,6 @@ def find_DBSCAN_clusters(
         label_to_pos_array = label_positions[clusters == cluster]  # get positions of each cluster
         cluster_centers = np.mean(label_to_pos_array, axis=0)  # mean of each column
 
-        cluster_list.append(DataCluster(cluster=label_to_pos_array, center=cluster_centers))
+        cluster_list.append(DataCluster(datapoints=label_to_pos_array, center=cluster_centers))
 
     return cluster_list

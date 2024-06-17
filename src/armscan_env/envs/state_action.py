@@ -84,8 +84,6 @@ class LabelmapStateAction(StateAction):
     labels_2d_slice: np.ndarray
     """Two-dimensional slice of the labelmap, i.e., an array of shape (N, M) with integer values.
     Each integer represents a different label (bone, nerve, etc.)"""
-    last_reward: float | None = None
-    """The reward for the previous state-action pair. May be None if the reward is not known."""
     optimal_position: np.ndarray | None = None
     """The optimal position for the 2D slice, i.e., the position where the slice is the most informative.
     May be None if the optimal position is not known."""

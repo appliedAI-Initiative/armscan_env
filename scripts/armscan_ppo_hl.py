@@ -54,7 +54,7 @@ env_factory = ArmscanEnvFactory(
     venv_type=VectorEnvType.SUBPROC_SHARED_MEM_AUTO,
     n_stack=4,
     termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.1),
-    reward_metric=LabelmapClusteringBasedReward(n_landmarks=(4, 2, 1)),
+    reward_metric=LabelmapClusteringBasedReward(),
 )
 
 builder = (

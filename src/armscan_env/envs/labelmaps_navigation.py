@@ -49,8 +49,8 @@ class LabelmapEnvTerminationCriterion(TerminationCriterion["LabelmapEnv"], ABC):
 
 class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
     """:param name2volume: mapping from labelmap names to volumes. One of these volumes will be selected at reset.
-    :param observation: defines the observation space, e.g. LabelmapSliceObservation
-    :param reward_metric: defines the reward metric that will be used, e.g. LabelmapClusteringBasedReward
+    :param observation: defines the observation space, e.g. `LabelmapSliceObservation`
+    :param reward_metric: defines the reward metric that will be used, e.g. `LabelmapClusteringBasedReward`
     :param termination_criterion: if None, no termination criterion will be used
     :param slice_shape: determines the shape of the 2D slices that will be used as observations
     :param max_episode_len: maximum number of steps in an episode
@@ -103,6 +103,17 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         self._fig: Figure | None = None
         self._axes: tuple[plt.Axes, plt.Axes, plt.Axes, plt.Axes, plt.Axes] | None = None
         self._camera: Camera | None = None
+
+        # Safety measure for things like LabelmapClusterObservation
+        # TODO: not nice, maybe make an interface
+        if (
+            hasattr(self.observation, "action_shape")
+            and self.action_space.shape != self.observation.action_shape
+        ):
+            raise ValueError(
+                f"The action space of the observation {self.observation} is {self.observation.action_shape} "
+                f"and does not match the action space of the environment: {self.action_space}.",
+            )
 
     @property
     def project_actions_to(self) -> Literal["x", "y", "xy"] | None:
@@ -243,7 +254,6 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         return LabelmapStateAction(
             normalized_action_arr=normalized_action_arr,
             labels_2d_slice=new_slice,
-            last_reward=self.reward_metric.compute_reward(self.cur_state_action),
             # cur_state_action is the previous state, so this reward is computed for the previous state
             optimal_position=self.cur_state_action.optimal_position,
             optimal_labelmap=self.cur_state_action.optimal_labelmap,
@@ -258,7 +268,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         self._cur_labelmap_name = sampled_image_name
         self._cur_labelmap_volume = self.name2volume[sampled_image_name]
         if None in self.translation_bounds:
-            self.compute_translation_bounds()
+            self._compute_translation_bounds()
         if self._slice_shape is None:
             self.compute_slice_shape(volume=self.cur_labelmap_volume)
         initial_slice = self._get_initial_slice()
@@ -267,7 +277,6 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
                 self._INITIAL_FULL_NORMALIZED_ACTION_ARR[self._get_projected_action_arr_idx()],
             ),
             labels_2d_slice=initial_slice,
-            last_reward=-1.0,
             # TODO: pass the env's optimal position and labelmap or remove them from the StateAction?
             optimal_position=None,
             optimal_labelmap=None,
@@ -280,7 +289,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         size = volume.GetSize()
         self._slice_shape = (size[0], size[2])
 
-    def compute_translation_bounds(self) -> None:
+    def _compute_translation_bounds(self) -> None:
         """Compute the translation bounds from the volume size."""
         if self.cur_labelmap_volume is None:
             raise RuntimeError("The labelmap volume must not be None, did you call reset?")
@@ -292,9 +301,6 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             if bounds[i] is None:
                 bounds[i] = size[i] * spacing[i]
         self.translation_bounds = tuple(bounds)  # type: ignore
-
-    def get_translation_bounds(self) -> tuple[float | None, float | None]:
-        return self.translation_bounds
 
     def get_cur_full_normalized_action_arr(self) -> np.ndarray:
         return self.get_full_action_array_from_projected_action(

@@ -11,6 +11,7 @@ from typing import (
 import numpy as np
 from armscan_env.clustering import TissueClusters, TissueLabel
 from armscan_env.envs.base import ArrayObservation, DictObservation
+from armscan_env.envs.rewards import anatomy_based_rwd
 from armscan_env.envs.state_action import LabelmapStateAction
 from armscan_env.util.img_processing import crop_center
 
@@ -98,14 +99,12 @@ class LabelmapSliceAsChannelsObservation(DictObservation[LabelmapStateAction]):
         return self.compute_from_slice(
             state.labels_2d_slice,
             state.normalized_action_arr,
-            state.last_reward,
         )
 
     def compute_from_slice(
         self,
         labels_2d_slice: np.ndarray,
         action: np.ndarray,
-        last_reward: float,
     ) -> ChanneledLabelmapsObsWithActReward:
         """Compute the observation from the labelmap slice, action, and reward and saves it in a dictionary of the
         form of ChanneledLabelmapsObsWithActReward.
@@ -117,10 +116,14 @@ class LabelmapSliceAsChannelsObservation(DictObservation[LabelmapStateAction]):
         )
         for channel, label in enumerate(TissueLabel):
             channeled_slice[channel] = cropped_slice == label.value
+
+        clusters = TissueClusters.from_labelmap_slice(labels_2d_slice)
+        clustering_reward = anatomy_based_rwd(tissue_clusters=clusters)
+
         return {
             "channeled_slice": channeled_slice,
             "action": np.array(action, dtype=np.float32),
-            "reward": np.array([last_reward], dtype=np.float32),
+            "reward": np.array([clustering_reward], dtype=np.float32),
         }
 
     @property
@@ -184,23 +187,25 @@ class LabelmapSliceObservation(DictObservation[LabelmapStateAction]):
         return self.compute_from_slice(
             state.labels_2d_slice,
             state.normalized_action_arr,
-            state.last_reward,
         )
 
     def compute_from_slice(
         self,
         labels_2d_slice: np.ndarray,
         action: np.ndarray,
-        last_reward: float,
     ) -> ChanneledLabelmapsObsWithActReward:
         """Compute the observation from the labelmap slice, action, and reward and saves it in a dictionary of the
         form of ChanneledLabelmapsObsWithActReward.
         """
         cropped_slice = crop_center(labels_2d_slice, self.slice_hw)
+
+        clusters = TissueClusters.from_labelmap_slice(labels_2d_slice)
+        clustering_reward = anatomy_based_rwd(tissue_clusters=clusters)
+
         return {
             "channeled_slice": np.array(cropped_slice, dtype=np.float32),
             "action": np.array(action, dtype=np.float32),
-            "reward": np.array([last_reward], dtype=np.float32),
+            "reward": np.array([clustering_reward], dtype=np.float32),
         }
 
     @property
@@ -239,16 +244,20 @@ class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
     (the past actions are useful if observations are stacked, which is usually the case).
     """
 
-    def __init__(self, action_shape: tuple[int]):
+    def __init__(self, action_shape: tuple[int] = (4,)):
+        # TODO: don't add actions here, instead add in a separate ObservationWrapper. Not urgent
         self.action_shape = action_shape
 
     def compute_observation(self, state: LabelmapStateAction) -> np.ndarray:
         tissue_clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
+
+        clustering_reward = anatomy_based_rwd(tissue_clusters=tissue_clusters)
+
         return np.concatenate(
             (
                 self.cluster_characteristics_array(tissue_clusters=tissue_clusters).flatten(),
                 np.atleast_1d(state.normalized_action_arr),
-                np.atleast_1d(state.last_reward),
+                np.atleast_1d(clustering_reward),
             ),
             axis=0,
         )
@@ -270,17 +279,24 @@ class LabelmapClusterObservation(ArrayObservation[LabelmapStateAction]):
 
     @staticmethod
     def cluster_characteristics_array(tissue_clusters: TissueClusters) -> np.ndarray:
+        """At the moment returns an array of len 3x4.
+
+        The result is: `(num_clusters, num_points in all clusters, cluster_center_mean_x, cluster_center_mean_y)`
+        for each tissue type, where values are zero if there are no clusters.
+        """
         cluster_characteristics = []
 
         for tissue_label in TissueLabel:
             clusters = tissue_clusters.get_cluster_for_label(tissue_label)
             num_points = 0
-            cluster_centers = []
-            for cluster in clusters:
-                num_points += len(cluster.datapoints)
-                cluster_centers.append(cluster.center)
-            clusters_center_mean = np.mean(np.array(cluster_centers), axis=0)
-            if np.any(np.isnan(clusters_center_mean)):
+            num_clusters = len(clusters)
+            if num_clusters > 0:
+                cluster_centers = []
+                for cluster in clusters:
+                    num_points += len(cluster.datapoints)
+                    cluster_centers.append(cluster.center)
+                clusters_center_mean = np.mean(np.array(cluster_centers), axis=0)
+            else:
                 clusters_center_mean = np.zeros(2)
             cluster_characteristics.append([len(clusters), num_points, *clusters_center_mean])
 

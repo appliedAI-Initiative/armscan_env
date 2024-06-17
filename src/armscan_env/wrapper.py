@@ -4,7 +4,6 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Any, Literal, SupportsFloat, cast
 
-import gymnasium as gym
 import numpy as np
 import SimpleITK as sitk
 from armscan_env.envs.base import Observation, RewardMetric, TerminationCriterion
@@ -15,10 +14,11 @@ from armscan_env.envs.labelmaps_navigation import (
 from armscan_env.envs.observations import MultiBoxSpace
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
 from armscan_env.envs.state_action import LabelmapStateAction
+
+import gymnasium as gym
 from gymnasium import Env, Wrapper
 from gymnasium.core import ActType, ObsType, WrapperActType
 from gymnasium.wrappers import FrameStackObservation
-
 from tianshou.highlevel.env import (
     EnvFactory,
     EnvMode,

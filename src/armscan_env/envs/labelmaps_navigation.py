@@ -3,7 +3,6 @@ from abc import ABC
 from copy import copy, deepcopy
 from typing import Any, ClassVar, Literal
 
-import gymnasium as gym
 import numpy as np
 import SimpleITK as sitk
 from armscan_env.clustering import TissueClusters
@@ -19,12 +18,14 @@ from armscan_env.envs.state_action import LabelmapStateAction, ManipulatorAction
 from armscan_env.slicing import slice_volume
 from armscan_env.util.visualizations import show_clusters
 from celluloid import Camera
-from gymnasium.core import ObsType as TObs
 from IPython.core.display import HTML
 from matplotlib import pyplot as plt
 from matplotlib.animation import ArtistAnimation
 from matplotlib.axes import Axes
 from matplotlib.figure import Figure
+
+import gymnasium as gym
+from gymnasium.core import ObsType as TObs
 
 log = logging.getLogger(__name__)
 

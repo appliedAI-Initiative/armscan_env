@@ -2,8 +2,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Generic, TypeVar
 
-import gymnasium as gym
 import numpy as np
+
+import gymnasium as gym
 from gymnasium.core import ActType as TAction
 from gymnasium.core import ObsType as TObs
 

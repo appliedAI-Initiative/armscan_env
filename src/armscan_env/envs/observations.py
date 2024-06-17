@@ -8,12 +8,13 @@ from typing import (
     cast,
 )
 
-import gymnasium as gym
 import numpy as np
 from armscan_env.clustering import TissueClusters, TissueLabel
 from armscan_env.envs.base import ArrayObservation, DictObservation
 from armscan_env.envs.state_action import LabelmapStateAction
 from armscan_env.util.img_processing import crop_center
+
+import gymnasium as gym
 
 
 class ChanneledLabelmapsObsWithActReward(TypedDict):

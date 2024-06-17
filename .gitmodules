@@ -2,3 +2,7 @@
 	path = tianshou
 	url = git@github.com:aai-institute/tianshou-fork.git
 	branch = armscan_env
+[submodule "gymnasium"]
+	path = gymnasium
+	url = git@github.com:carlocagnetta/Gymnasium-fork.git
+	branch = armscan_env

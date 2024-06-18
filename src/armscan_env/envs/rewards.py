@@ -59,13 +59,13 @@ def anatomy_based_rwd(
 
         # Check the orientation of the arm:
         # The bones center might be over or under the tendons center depending on the origin
-        orientation = (bones_centers_mean[0] - tendons_centers_mean[0]) // abs(
-            bones_centers_mean[0] - tendons_centers_mean[0],
+        orientation = (bones_centers_mean[1] - tendons_centers_mean[1]) // abs(
+            bones_centers_mean[1] - tendons_centers_mean[1],
         )
         log.debug(f"{orientation=}")
 
         # Ulnar artery must be under tendons in the positive orientation:
-        if orientation * ulnar_center[0] < orientation * tendons_centers_mean[0]:
+        if orientation * ulnar_center[1] < orientation * tendons_centers_mean[1]:
             location_loss = 0
         else:
             log.debug("Ulnar center not where expected")

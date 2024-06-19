@@ -5,10 +5,10 @@ import SimpleITK as sitk
 from armscan_env.config import get_config
 from armscan_env.envs.labelmaps_navigation import LabelmapEnvTerminationCriterion
 from armscan_env.envs.observations import (
-    ActionRewardObservation,
-    LabelmapClusterObservation,
+    LabelmapSliceAsChannelsObservation,
 )
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
+from armscan_env.network import ActorFactoryArmscanDQN
 from armscan_env.wrapper import ArmscanEnvFactory
 
 from tianshou.highlevel.config import SamplingConfig
@@ -28,36 +28,38 @@ if __name__ == "__main__":
     volume_1 = sitk.ReadImage(config.get_labels_path(1))
     volume_2 = sitk.ReadImage(config.get_labels_path(2))
 
-    log_name = os.path.join("sac-characteristic-array", str(ExperimentConfig.seed), datetime_tag())
+    log_name = os.path.join("sac-dqn", str(ExperimentConfig.seed), datetime_tag())
     experiment_config = ExperimentConfig()
 
     sampling_config = SamplingConfig(
-        num_epochs=10,
-        step_per_epoch=100000,
+        num_epochs=1,
+        step_per_epoch=1000000,
         num_train_envs=-1,
-        num_test_envs=1,
-        buffer_size=100000,
+        num_test_envs=10,
+        buffer_size=1000000,
         batch_size=256,
-        step_per_collect=10,
-        update_per_step=100,
-        start_timesteps=500,
+        step_per_collect=200,
+        update_per_step=10,
+        start_timesteps=5000,
         start_timesteps_random=True,
     )
 
     volume_size = volume_1.GetSize()
     env_factory = ArmscanEnvFactory(
-        name2volume={"1": volume_1},
-        observation=LabelmapClusterObservation()
-        .merged_with(other=ActionRewardObservation(action_shape=(1,)))  # type: ignore
-        .to_array_observation(),
+        name2volume={
+            "1": volume_1,
+        },
+        observation=LabelmapSliceAsChannelsObservation(
+            slice_shape=(volume_size[0], volume_size[2]),
+            action_shape=(1,),
+        ),
         slice_shape=(volume_size[0], volume_size[2]),
         max_episode_len=20,
         rotation_bounds=(90.0, 45.0),
         translation_bounds=(0.0, None),
-        render_mode="animation",
         seed=experiment_config.seed,
         venv_type=VectorEnvType.SUBPROC_SHARED_MEM_AUTO,
-        n_stack=4,
+        n_stack=3,
         termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.1),
         reward_metric=LabelmapClusteringBasedReward(),
         project_actions_to="y",
@@ -76,12 +78,8 @@ if __name__ == "__main__":
                 critic2_lr=1e-3,
             ),
         )
-        .with_actor_factory_default(
-            (256, 256),
-            continuous_unbounded=True,
-            continuous_conditioned_sigma=True,
-        )
-        .with_common_critic_factory_default((256, 256))
+        .with_actor_factory(ActorFactoryArmscanDQN())
+        .with_common_critic_factory_use_actor()
         .build()
     )
 

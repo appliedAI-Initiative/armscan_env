@@ -33,8 +33,8 @@ if __name__ == "__main__":
     sampling_config = SamplingConfig(
         num_epochs=1,
         step_per_epoch=1000000,
-        num_train_envs=5,
-        num_test_envs=1,
+        num_train_envs=-1,
+        num_test_envs=10,
         buffer_size=1000000,
         batch_size=256,
         step_per_collect=200,
@@ -45,7 +45,7 @@ if __name__ == "__main__":
 
     volume_size = volume_1.GetSize()
     env_factory = ArmscanEnvFactory(
-        name2volume={"1": volume_1},
+        name2volume={"1": volume_1, "2": volume_2},
         observation=ActionRewardObservation(action_shape=(1,)).to_array_observation(),
         slice_shape=(volume_size[0], volume_size[2]),
         max_episode_len=10,

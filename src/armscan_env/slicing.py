@@ -39,6 +39,70 @@ def padding(original_array: np.ndarray) -> np.ndarray:
     return padded_array
 
 
+def transform_volume(
+    volume: sitk.Image,
+    z_rotation: float | np.ndarray = 0.0,
+    x_rotation: float | np.ndarray = 0.0,
+    x_trans: float | np.ndarray = 0.0,
+    y_trans: float | np.ndarray = 0.0,
+) -> sitk.Image:
+    """Trasnform a 3D volume with arbitrary rotation and translation.
+
+    :param z_rotation: rotation around z-axis in degrees
+    :param x_rotation: rotation around x-axis in degrees
+    :param x_trans: translation along x-axis
+    :param y_trans: translation along y-axis
+    :param volume: 3D volume to be sliced
+    :return: the sliced volume.
+    """
+    # Euler's transformation
+    # Rotation is defined by three rotations around z1, x2, z2 axis
+    th_z1 = np.deg2rad(z_rotation)
+    th_x2 = np.deg2rad(x_rotation)
+
+    o = np.array(volume.GetOrigin())
+
+    # transformation simplified at z2=0 since this rotation is never performed
+    eul_tr = np.array(
+        [
+            [
+                np.cos(th_z1),
+                -np.sin(th_z1) * np.cos(th_x2),
+                np.sin(th_z1) * np.sin(th_x2),
+                o[0] + x_trans,
+            ],
+            [
+                np.sin(th_z1),
+                np.cos(th_z1) * np.cos(th_x2),
+                -np.cos(th_z1) * np.sin(th_x2),
+                o[1] + y_trans,
+            ],
+            [0, np.sin(th_x2), np.cos(th_x2), o[2]],
+            [0, 0, 0, 1],
+        ],
+    )
+
+    # Define plane's coordinate system
+    e1 = eul_tr[0][:3]
+    e2 = eul_tr[1][:3]
+    e3 = eul_tr[2][:3]
+    img_o = eul_tr[:, -1:].flatten()[:3]  # origin of the image plane
+
+    direction = np.stack([e1, e2, e3], axis=0).flatten()
+
+    resampler = sitk.ResampleImageFilter()
+    spacing = volume.GetSpacing()
+
+    resampler.SetOutputDirection(direction.tolist())
+    resampler.SetOutputOrigin(img_o.tolist())
+    resampler.SetOutputSpacing(spacing)
+    resampler.SetSize(volume.GetSize())
+    resampler.SetInterpolator(sitk.sitkNearestNeighbor)
+
+    # Resample the volume on the arbitrary plane
+    return resampler.Execute(volume)
+
+
 def slice_volume(
     volume: sitk.Image,
     slice_shape: tuple[int, int],

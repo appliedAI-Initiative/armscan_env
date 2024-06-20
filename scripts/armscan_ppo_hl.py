@@ -28,7 +28,10 @@ if __name__ == "__main__":
     volume_2 = sitk.ReadImage(config.get_labels_path(2))
 
     log_name = os.path.join(
-        "ppo", str(ExperimentConfig.seed), "4_stack-lin_sweep_v1", datetime_tag(),
+        "ppo",
+        str(ExperimentConfig.seed),
+        "4_stack-lin_sweep_v1",
+        datetime_tag(),
     )
     experiment_config = ExperimentConfig()
 

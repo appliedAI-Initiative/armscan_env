@@ -166,6 +166,7 @@ class ArmscanEnvFactory(EnvFactory):
         seed: int | None = None,
         n_stack: int = 1,
         project_actions_to: Literal["x", "y", "xy"] | None = None,
+        apply_volume_transformation: bool = False,
         **make_kwargs: Any,
     ) -> None:
         super().__init__(venv_type)
@@ -185,6 +186,7 @@ class ArmscanEnvFactory(EnvFactory):
         self.seed = seed
         self.n_stack = n_stack
         self.project_actions_to = project_actions_to
+        self.apply_volume_transformation = apply_volume_transformation
         self.make_kwargs = make_kwargs
 
     def _create_kwargs(self) -> dict:
@@ -211,6 +213,7 @@ class ArmscanEnvFactory(EnvFactory):
             render_mode=self.render_modes.get(mode),
             seed=self.seed,
             project_actions_to=self.project_actions_to,
+            apply_volume_transformation=self.apply_volume_transformation,
         )
 
         if self.n_stack > 1:

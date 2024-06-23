@@ -10,10 +10,10 @@ log = logging.getLogger(__name__)
 
 @dataclass(kw_only=True)
 class ManipulatorAction:
-    rotation: tuple[float, float]
+    rotation: tuple[float, float] | np.ndarray
     """Array of shape (2,) representing two angles in degrees (z_rot, x_rot). The angles will take values between
     -180 and 180 deg."""
-    translation: tuple[float, float]
+    translation: tuple[float, float] | np.ndarray
     """Array of shape (2,) representing two translations (x_trans, y_trans) in mm."""
 
     def to_normalized_array(

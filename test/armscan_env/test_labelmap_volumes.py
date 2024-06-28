@@ -5,6 +5,7 @@ import pytest
 import SimpleITK as sitk
 from armscan_env.clustering import TissueLabel
 from armscan_env.config import get_config
+from armscan_env.envs.state_action import ManipulatorAction
 from armscan_env.volumes.slicing import slice_volume
 
 config = get_config()
@@ -41,7 +42,10 @@ class TestLabelMaps:
             sliced_volume = slice_volume(
                 volume=labelmap,
                 slice_shape=slice_shape,
-                y_trans=-labelmap.GetOrigin()[1],
+                action=ManipulatorAction(
+                    rotation=(0.0, 0.0),
+                    translation=(0.0, labelmap.GetOrigin()[1]),
+                ),
             )
             sliced_img = sitk.GetArrayFromImage(sliced_volume)[:, 0, :]
             assert not np.all(sliced_img == 0)

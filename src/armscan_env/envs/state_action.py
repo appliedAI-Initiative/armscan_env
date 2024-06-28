@@ -1,4 +1,5 @@
 import logging
+import warnings
 from dataclasses import dataclass
 from typing import Self
 
@@ -29,6 +30,9 @@ class ManipulatorAction:
         # normalize translation to [-1, 1]: 0 -> -1, translation_bounds -> 1
         rotation = np.zeros(2)
         translation = np.zeros(2)
+        if self.translation[0] < 0 or self.translation[1] < 0:
+            log.info("Projecting to positive because negative defined translation")
+            self.project_to_positive()
         for i in range(2):
             if rotation_bounds[i] == 0.0:
                 rotation[i] = 0.0
@@ -43,7 +47,7 @@ class ManipulatorAction:
         result = np.concatenate([rotation, translation])
 
         if not (result >= -1).all() or not (result <= 1).all():
-            raise ValueError(
+            warnings.warn(
                 f"Angles or translations are out of bounds: "
                 f"{self.rotation=}, {self.translation=},"
                 f" {rotation_bounds=}, {translation_bounds=}",
@@ -63,7 +67,7 @@ class ManipulatorAction:
         if not (action.shape == (4,)):
             raise ValueError(f"Action has wrong shape: {action.shape=}\nShould be (4,)")
         if not (action >= -1).all() or not (action <= 1).all():
-            raise ValueError(
+            warnings.warn(
                 f"Action is not normalized: {action=}\nShould be in the range [-1, 1]",
             )
         if None in translation_bounds:
@@ -75,6 +79,22 @@ class ManipulatorAction:
         log.debug(f"Unnormalized action: {rotation=} deg, {translation=}")
 
         return cls(rotation=tuple(rotation), translation=tuple(translation))  # type: ignore
+
+    def project_to_positive(self) -> None:
+        """Project the action to the positive octant."""
+        tx, ty = self.translation
+        thz, thx = self.rotation
+        log.info(f"Translation before projection: {self.translation}")
+        while tx < 0 or ty < 0:
+            if tx < 0:
+                ty = (np.tan(np.deg2rad(thz)) * (-tx)) + ty
+                tx = 0
+            if ty < 0:
+                tx = ((1 / np.tan(np.deg2rad(thz))) * (-ty)) + tx
+                ty = 0
+        translation = (tx, ty)
+        log.info(f"Translation after projection: {translation}")
+        self.translation = translation
 
 
 @dataclass(kw_only=True)

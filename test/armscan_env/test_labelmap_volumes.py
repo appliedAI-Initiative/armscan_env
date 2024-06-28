@@ -5,7 +5,7 @@ import pytest
 import SimpleITK as sitk
 from armscan_env.clustering import TissueLabel
 from armscan_env.config import get_config
-from armscan_env.slicing import slice_volume
+from armscan_env.volumes.slicing import slice_volume
 
 config = get_config()
 

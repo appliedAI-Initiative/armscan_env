@@ -15,8 +15,8 @@ from armscan_env.envs.base import (
 )
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
 from armscan_env.envs.state_action import LabelmapStateAction, ManipulatorAction
-from armscan_env.slicing import slice_volume, transform_volume
 from armscan_env.util.visualizations import show_clusters
+from armscan_env.volumes.slicing import slice_volume, transform_volume
 from celluloid import Camera
 from IPython.core.display import HTML
 from matplotlib import pyplot as plt

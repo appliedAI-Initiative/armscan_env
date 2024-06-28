@@ -44,7 +44,7 @@ class TestLabelMaps:
                 slice_shape=slice_shape,
                 action=ManipulatorAction(
                     rotation=(0.0, 0.0),
-                    translation=(0.0, labelmap.GetOrigin()[1]),
+                    translation=(0.0, -labelmap.GetOrigin()[1]),
                 ),
             )
             sliced_img = sitk.GetArrayFromImage(sliced_volume)[:, 0, :]

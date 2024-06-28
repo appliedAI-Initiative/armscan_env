@@ -38,9 +38,9 @@ if __name__ == "__main__":
         num_test_envs=1,
         buffer_size=100000,
         batch_size=256,
-        step_per_collect=10,
-        update_per_step=100,
-        start_timesteps=500,
+        step_per_collect=200,
+        update_per_step=2,
+        start_timesteps=5000,
         start_timesteps_random=True,
     )
 
@@ -61,6 +61,7 @@ if __name__ == "__main__":
         termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.1),
         reward_metric=LabelmapClusteringBasedReward(),
         project_actions_to="y",
+        apply_volume_transformation=True
     )
 
     experiment = (

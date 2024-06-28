@@ -35,7 +35,7 @@ if __name__ == "__main__":
         num_epochs=1,
         step_per_epoch=1000000,
         num_train_envs=-1,
-        num_test_envs=10,
+        num_test_envs=1,
         buffer_size=1000000,
         batch_size=256,
         step_per_collect=200,

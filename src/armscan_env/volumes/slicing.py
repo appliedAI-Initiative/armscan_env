@@ -102,7 +102,7 @@ class EulerTransform:
             translation=new_action_translation,
         )
 
-        log.info(
+        log.debug(
             f"Random transformation: {self.action}\n"
             f"Original action: {relative_action}\n"
             f"Transformed action: {transformed_action}\n",

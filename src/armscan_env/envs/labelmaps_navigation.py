@@ -16,7 +16,7 @@ from armscan_env.envs.base import (
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
 from armscan_env.envs.state_action import LabelmapStateAction, ManipulatorAction
 from armscan_env.util.visualizations import show_clusters
-from armscan_env.volumes.slicing import slice_volume, transform_volume
+from armscan_env.volumes.slicing import EulerTransform, slice_volume, transform_volume
 from celluloid import Camera
 from IPython.core.display import HTML
 from matplotlib import pyplot as plt
@@ -243,10 +243,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         sliced_volume = slice_volume(
             volume=self.cur_labelmap_volume,
             slice_shape=self._slice_shape,
-            z_rotation=manipulator_action.rotation[0],
-            x_rotation=manipulator_action.rotation[1],
-            x_trans=manipulator_action.translation[0],
-            y_trans=manipulator_action.translation[1],
+            action=manipulator_action,
         )
         return sitk.GetArrayFromImage(sliced_volume)[:, 0, :].T
 
@@ -272,32 +269,17 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         volume: sitk.Image,
         optimal_action: ManipulatorAction,
     ) -> (sitk.Image, ManipulatorAction):  # type: ignore
-        small_random_z_rotation = np.random.uniform(-20, 20)
-        small_random_x_rotation = np.random.uniform(-5, 5)
-        small_random_x_translation = np.random.uniform(-25, 25)
-        small_random_y_translation = np.random.uniform(-5, 5)
-        transformed_optimal_action = ManipulatorAction(
-            rotation=(
-                optimal_action.rotation[0] + small_random_z_rotation,
-                optimal_action.rotation[1] + small_random_x_rotation,
-            ),
-            translation=(
-                optimal_action.translation[0],
-                optimal_action.translation[1] + small_random_y_translation,
-            ),
+        volume_transformation = ManipulatorAction(
+            rotation=(np.random.uniform(-20, 20), np.random.uniform(-5, 5)),
+            translation=(np.random.uniform(-5, 5), np.random.uniform(-5, 5)),
         )
-        if self.rotation_bounds:
-            bounds = list(self.rotation_bounds)
-            bounds[0] += abs(small_random_z_rotation)
-            bounds[1] += abs(small_random_x_rotation)
-            self.rotation_bounds = tuple(bounds)  # type: ignore
+        transformed_optimal_action = EulerTransform(volume_transformation).transform_action(
+            optimal_action,
+        )
         return (
             transform_volume(
                 volume=volume,
-                z_rotation=small_random_z_rotation,
-                x_rotation=small_random_x_rotation,
-                x_trans=small_random_x_translation,
-                y_trans=small_random_y_translation,
+                action=volume_transformation,
             ),
             transformed_optimal_action,
         )

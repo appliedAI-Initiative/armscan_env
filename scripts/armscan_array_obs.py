@@ -33,14 +33,14 @@ if __name__ == "__main__":
 
     sampling_config = SamplingConfig(
         num_epochs=10,
-        step_per_epoch=100000,
-        num_train_envs=-1,
+        step_per_epoch=10,
+        num_train_envs=1,
         num_test_envs=1,
-        buffer_size=100000,
+        buffer_size=10,
         batch_size=256,
         step_per_collect=200,
         update_per_step=2,
-        start_timesteps=5000,
+        start_timesteps=1,
         start_timesteps_random=True,
     )
 
@@ -61,7 +61,7 @@ if __name__ == "__main__":
         termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.1),
         reward_metric=LabelmapClusteringBasedReward(),
         project_actions_to="y",
-        apply_volume_transformation=True
+        apply_volume_transformation=True,
     )
 
     experiment = (

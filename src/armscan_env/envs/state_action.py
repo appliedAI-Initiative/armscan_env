@@ -31,7 +31,7 @@ class ManipulatorAction:
         rotation = np.zeros(2)
         translation = np.zeros(2)
         if self.translation[0] < 0 or self.translation[1] < 0:
-            log.info("Projecting to positive because negative defined translation")
+            log.debug("Projecting to positive because negative defined translation")
             self.project_to_positive()
         for i in range(2):
             if rotation_bounds[i] == 0.0:
@@ -84,7 +84,7 @@ class ManipulatorAction:
         """Project the action to the positive octant."""
         tx, ty = self.translation
         thz, thx = self.rotation
-        log.info(f"Translation before projection: {self.translation}")
+        log.debug(f"Translation before projection: {self.translation}")
         while tx < 0 or ty < 0:
             if tx < 0:
                 ty = (np.tan(np.deg2rad(thz)) * (-tx)) + ty
@@ -93,7 +93,7 @@ class ManipulatorAction:
                 tx = ((1 / np.tan(np.deg2rad(thz))) * (-ty)) + tx
                 ty = 0
         translation = (tx, ty)
-        log.info(f"Translation after projection: {translation}")
+        log.debug(f"Translation after projection: {translation}")
         self.translation = translation
 
 

@@ -23,9 +23,9 @@ class TissueLabel(Enum):
             case TissueLabel.BONES:
                 return find_DBSCAN_clusters(self, labelmap_slice, eps=4.1, min_samples=46)
             case TissueLabel.TENDONS:
-                return find_DBSCAN_clusters(self, labelmap_slice, eps=4.1, min_samples=46)
+                return find_DBSCAN_clusters(self, labelmap_slice, eps=2.5, min_samples=15)
             case TissueLabel.ULNAR:
-                return find_DBSCAN_clusters(self, labelmap_slice, eps=2.5, min_samples=18)
+                return find_DBSCAN_clusters(self, labelmap_slice, eps=2.0, min_samples=10)
             case _:
                 raise ValueError(f"Unknown tissue label: {self}")
 
@@ -142,9 +142,10 @@ def find_DBSCAN_clusters(
     label_positions = np.array(list(zip(*np.where(binary_mask), strict=True)))
     clusterer = DBSCAN(eps=eps, min_samples=min_samples)
     clusters = clusterer.fit_predict(label_positions)
-    n_clusters = (
-        len(np.unique(clusters)) - 1
-    )  # noise cluster has label -1, we don't take it into account
+    if -1 in clusters:
+        n_clusters = len(np.unique(clusters)) - 1
+    else:
+        n_clusters = len(np.unique(clusters))
     log.debug(f"Found {n_clusters} clusters")
 
     cluster_list = []

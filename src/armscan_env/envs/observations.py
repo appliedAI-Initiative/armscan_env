@@ -5,7 +5,6 @@ from typing import (
     Generic,
     TypedDict,
     TypeVar,
-    Union,
     cast,
 )
 
@@ -32,7 +31,25 @@ class ChanneledLabelmapsObsWithActReward(TypedDict):
     reward: np.ndarray
 
 
-TDict = TypeVar("TDict", bound=Union[dict, ChanneledLabelmapsObsWithActReward])  # noqa
+class ActionRewardDict(TypedDict):
+    action: np.ndarray
+    reward: np.ndarray
+
+
+class ClusteringCharsDict(TypedDict):
+    num_clusters: np.ndarray
+    num_points: np.ndarray
+    cluster_center_mean: np.ndarray
+
+
+class ClusterObservationDict(ClusteringCharsDict, ActionRewardDict):
+    pass
+
+
+TDict = TypeVar(
+    "TDict",
+    bound=dict | ChanneledLabelmapsObsWithActReward | ClusteringCharsDict | ActionRewardDict,
+)
 
 
 class MultiBoxSpace(gym.spaces.Dict, Generic[TDict]):
@@ -238,21 +255,6 @@ class LabelmapSliceObservation(DictObservation[LabelmapStateAction]):
         return self._observation_space
 
 
-class ActionRewardDict(TypedDict):
-    action: np.ndarray
-    reward: np.ndarray
-
-
-class ClusteringCharsDict(TypedDict):
-    num_clusters: np.ndarray
-    num_points: np.ndarray
-    cluster_center_mean: np.ndarray
-
-
-class ClusterObservationDict(ClusteringCharsDict, ActionRewardDict):
-    pass
-
-
 class ActionRewardObservation(DictObservation[LabelmapStateAction]):
     """Observation containing (normalized) action and a computed `reward`.
 
@@ -269,19 +271,17 @@ class ActionRewardObservation(DictObservation[LabelmapStateAction]):
         return self._action_shape
 
     @cached_property
-    def observation_space(self) -> gym.spaces.Dict:
-        return gym.spaces.Dict(
-            spaces=(
-                ("action", gym.spaces.Box(low=-1, high=1, shape=self.action_shape)),
-                ("reward", gym.spaces.Box(low=-1, high=0, shape=(1,))),
-            ),
+    def observation_space(self) -> MultiBoxSpace:
+        return MultiBoxSpace[ActionRewardDict](
+            name2box={
+                "reward": gym.spaces.Box(low=-1, high=0, shape=(1,)),
+                "action": gym.spaces.Box(low=-1, high=1, shape=self.action_shape),
+            },
         )
 
     def compute_observation(self, state: LabelmapStateAction) -> ActionRewardDict:
         tissue_clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
-
         clustering_reward = anatomy_based_rwd(tissue_clusters=tissue_clusters)
-
         return {
             "action": state.normalized_action_arr,
             "reward": np.array([clustering_reward], dtype=np.float32),
@@ -292,16 +292,17 @@ class LabelmapClusterObservation(DictObservation[LabelmapStateAction]):
     """Observation for a flat array representation of a clustered labelmap slice."""
 
     @cached_property
-    def observation_space(self) -> gym.spaces.Dict:
-        return gym.spaces.Dict(
-            spaces=(
-                ("num_clusters", gym.spaces.Box(low=0, high=np.inf, shape=(len(TissueLabel),))),
-                ("num_points", gym.spaces.Box(low=0, high=np.inf, shape=(len(TissueLabel),))),
-                (
-                    "cluster_center_mean",
-                    gym.spaces.Box(low=-np.inf, high=np.inf, shape=(2 * len(TissueLabel),)),
+    def observation_space(self) -> MultiBoxSpace:
+        return MultiBoxSpace[ClusteringCharsDict](
+            name2box={
+                "num_clusters": gym.spaces.Box(low=0, high=np.inf, shape=(len(TissueLabel),)),
+                "num_points": gym.spaces.Box(low=0, high=np.inf, shape=(len(TissueLabel),)),
+                "cluster_center_mean": gym.spaces.Box(
+                    low=-np.inf,
+                    high=np.inf,
+                    shape=(2 * len(TissueLabel),),
                 ),
-            ),
+            },
         )
 
     def compute_observation(self, state: LabelmapStateAction) -> ClusteringCharsDict:
@@ -329,8 +330,8 @@ class LabelmapClusterObservation(DictObservation[LabelmapStateAction]):
             else:
                 clusters_center_mean = np.zeros(2, dtype=float)
 
-            tissues_num_points[i] = num_points
             tissues_num_clusters[i] = num_clusters
+            tissues_num_points[i] = num_points
             tissues_cluster_centers[i] = clusters_center_mean
 
         # keep in sync with observation_space

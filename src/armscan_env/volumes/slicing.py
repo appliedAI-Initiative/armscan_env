@@ -38,8 +38,10 @@ def padding(original_array: np.ndarray) -> np.ndarray:
     )
 
     # Verify the shapes
-    print("Original Array Shape:", original_array.shape)
-    print("Padded Array Shape:", padded_array.shape)
+    log.debug(
+        f"Original Array Shape: {original_array.shape}\n"
+        f"Padded Array Shape: {padded_array.shape}",
+    )
 
     return padded_array
 
@@ -93,12 +95,17 @@ class EulerTransform:
         volume_transform_matrix = self.get_transform()
 
         action_matrix = EulerTransform(relative_action).get_transform()
-        # new_action_matrix = np.dot(np.linalg.inv(volume_transform_matrix), action_matrix)  # 1_A_s = 1_T_0 * 0_A_s
+        new_action_matrix = np.dot(
+            np.linalg.inv(volume_transform_matrix),
+            action_matrix,
+        )  # 1_A_s = 1_T_0 * 0_A_s
 
-        new_action_translation = action_matrix[:2, 3] - volume_transform_matrix[:2, 3]
+        # new_action_translation = action_matrix[:2, 3] - volume_transform_matrix[:2, 3]
+        new_action_rotation = self.get_angles_from_rotation_matrix(new_action_matrix[:3, :3])
+        new_action_translation = new_action_matrix[:2, 3]
 
         transformed_action = ManipulatorAction(
-            rotation=relative_action.rotation,
+            rotation=new_action_rotation,
             translation=new_action_translation,
         )
 
@@ -111,10 +118,16 @@ class EulerTransform:
         return transformed_action
 
 
+class TransformedVolume(sitk.Image):
+    def __init__(self, volume: sitk.Image, action: ManipulatorAction):
+        super().__init__(volume)
+        self.transformation_action = action
+
+
 def transform_volume(
     volume: sitk.Image,
     action: ManipulatorAction,
-) -> sitk.Image:
+) -> TransformedVolume:
     """Trasnform a 3D volume with arbitrary rotation and translation.
 
     :param volume: 3D volume to be transformed
@@ -142,15 +155,14 @@ def transform_volume(
     resampler.SetSize(volume.GetSize())
     resampler.SetInterpolator(sitk.sitkNearestNeighbor)
 
-    # Todo: hack --> needed to break rotation dependency
-    volume.transformation_action = action  # type: ignore
-
     # Resample the volume on the arbitrary plane
-    return resampler.Execute(volume)
+    transformed_volume = resampler.Execute(volume)
+    # Todo: hack --> needed to break rotation dependency
+    return TransformedVolume(transformed_volume, action)
 
 
 def slice_volume(
-    volume: sitk.Image,
+    volume: sitk.Image | TransformedVolume,
     slice_shape: tuple[int, int],
     action: ManipulatorAction,
 ) -> sitk.Image:
@@ -162,17 +174,26 @@ def slice_volume(
     :return: the sliced volume.
     """
     o = np.array(volume.GetOrigin())
+
+    # Todo: hack --> the action attribute set in transform_volume; find a better solution later
+    if hasattr(volume, "transformation_action"):
+        volume_transformation = EulerTransform(volume.transformation_action).get_transform()
+        action_transformation = EulerTransform(action).get_transform()
+        detransformed_action = np.dot(volume_transformation, action_transformation)
+        action_rotation = EulerTransform.get_angles_from_rotation_matrix(
+            detransformed_action[:3, :3],
+        )
+        action_translation = (detransformed_action[:3, 3] - volume_transformation[:3, 3])[:2]
+        action = ManipulatorAction(rotation=action_rotation, translation=(action_translation))
+
     euler_transform = EulerTransform(action, o)
     eul_tr = euler_transform.get_transform()
 
     # Define plane's coordinate system
-    e1 = eul_tr[0][:3]
-    e2 = eul_tr[1][:3]
-    e3 = eul_tr[2][:3]
-    img_o = eul_tr[:, -1:].flatten()[:3]  # origin of the image plane
+    rotation = eul_tr[:3, :3]
+    translation = eul_tr[:, -1:].flatten()[:3]  # origin of the image plane
 
-    # Todo: hack --> the action attribute set in transform_volume; find a better solution later
-    direction = np.stack([e1, e2, e3], axis=0).flatten()
+    rotation = rotation.flatten()
 
     resampler = sitk.ResampleImageFilter()
     spacing = volume.GetSpacing()
@@ -180,8 +201,8 @@ def slice_volume(
     w = slice_shape[0]
     h = slice_shape[1]
 
-    resampler.SetOutputDirection(direction.tolist())
-    resampler.SetOutputOrigin(img_o.tolist())
+    resampler.SetOutputDirection(rotation.tolist())
+    resampler.SetOutputOrigin(translation.tolist())
     resampler.SetOutputSpacing(spacing)
     resampler.SetSize((w, 3, h))
     resampler.SetInterpolator(sitk.sitkNearestNeighbor)

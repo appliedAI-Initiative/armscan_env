@@ -32,7 +32,7 @@ log = logging.getLogger(__name__)
 
 _VOL_NAME_TO_OPTIMAL_ACTION = {
     "1": ManipulatorAction(rotation=(19.3, 0.0), translation=(0.0, 140.0)),
-    "2": ManipulatorAction(rotation=(0.0, 0.0), translation=(0.0, 115.0)),
+    "2": ManipulatorAction(rotation=(5, 0), translation=(0, 112)),
 }
 
 
@@ -168,8 +168,8 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         full_action_arr = self.get_full_optimal_action_array()
         return full_action_arr[self._get_projected_action_arr_idx()]
 
-    def step_to_optimal_state(self) -> None:
-        self.step(self.get_optimal_action())
+    def step_to_optimal_state(self) -> tuple[TObs, float, bool, bool, dict[str, Any]]:
+        return self.step(self.get_optimal_action())
 
     @property
     def cur_labelmap_name(self) -> str | None:
@@ -276,6 +276,11 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         transformed_optimal_action = EulerTransform(volume_transformation).transform_action(
             optimal_action,
         )
+        if self.rotation_bounds:
+            bounds = list(self.rotation_bounds)
+            bounds[0] += abs(volume_transformation.rotation[0])
+            bounds[1] += abs(volume_transformation.rotation[1])
+            self.rotation_bounds = tuple(bounds)  # type: ignore
         return (
             transform_volume(
                 volume=volume,
@@ -426,7 +431,9 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         iz = volume.GetSize()[2] // 2
         ax1.imshow(img_array[iz, :, :])
         x_dash = np.arange(img_array.shape[2])
-        b = volume.TransformPhysicalPointToIndex([o[0], o[1] + translation[1], o[2]])[1]
+        b = volume.TransformPhysicalPointToIndex(
+            [o[0] + translation[0], o[1] + translation[1], o[2]],
+        )[1]
         b_x = b + np.tan(np.deg2rad(rotation[1])) * iz
         y_dash = np.tan(np.deg2rad(rotation[0])) * x_dash + b_x
         y_dash = np.clip(y_dash, 0, img_array.shape[1] - 1)

@@ -8,17 +8,24 @@ from typing import Any, Final, Literal, SupportsFloat, TypeVar, cast
 
 import numpy as np
 import SimpleITK as sitk
-from armscan_env.envs.base import Observation, RewardMetric, TerminationCriterion
+from armscan_env.clustering import TissueClusters
+from armscan_env.envs.base import (
+    ConcatenatedArrayObservation,
+    Observation,
+    RewardMetric,
+    TerminationCriterion,
+)
 from armscan_env.envs.labelmaps_navigation import (
     LabelmapEnv,
     LabelmapEnvTerminationCriterion,
 )
-from armscan_env.envs.observations import MultiBoxSpace
-from armscan_env.envs.rewards import LabelmapClusteringBasedReward
+from armscan_env.envs.observations import ActionRewardObservation, MultiBoxSpace
+from armscan_env.envs.rewards import LabelmapClusteringBasedReward, anatomy_based_rwd
 from armscan_env.envs.state_action import LabelmapStateAction
 
 import gymnasium as gym
 from gymnasium.core import Env, Wrapper
+from gymnasium.spaces import Box
 from gymnasium.spaces import Dict as DictSpace
 from gymnasium.vector.utils import batch_space, concatenate, create_empty_array
 from gymnasium.wrappers.utils import create_zero_array
@@ -34,10 +41,39 @@ ActType = TypeVar("ActType")
 log = logging.getLogger(__name__)
 
 
+# Todo: Issue on gymnasium for not overwriting reset method
+class PatchedWrapper(Wrapper[np.ndarray, float, np.ndarray, np.ndarray]):
+    def __init__(self, env: LabelmapEnv | Env):
+        super().__init__(env)
+        # Helps with IDE autocompletion
+        self.env = cast(LabelmapEnv, env)
+
+    def reset(self, **kwargs: Any) -> tuple[ObsType, dict[str, Any]]:
+        return self.env.reset(**kwargs)
+
+    def __getattr__(self, item: str) -> Any:
+        return getattr(self.env, item)
+
+
+class PatchedActionWrapper(PatchedWrapper, ABC):
+    def __init__(self, env: Env[ObsType, ActType]):
+        super().__init__(env)
+
+    def step(
+        self,
+        action: ActType,
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+        return self.env.step(self.action(action))
+
+    @abstractmethod
+    def action(self, action: ActType) -> np.ndarray:
+        pass
+
+
 class PatchedFrameStackObservation(Wrapper):
     def __init__(
         self,
-        env: gym.core.Env[ObsType, ActType],
+        env: Env[ObsType, ActType],
         stack_size: int,
         *,
         padding_type: str | ObsType = "reset",
@@ -128,26 +164,116 @@ class PatchedFrameStackObservation(Wrapper):
         return getattr(self.env, item)
 
 
-class ArmscanEnvFactory(EnvFactory):
-    """:param name2volume: the gymnasium task/environment identifier
-    :param observation: the observation to use
-    :param reward_metric: the reward metric to use
-    :param termination_criterion: the termination criterion to use
-    :param slice_shape: the shape of the slice
-    :param max_episode_len: the maximum episode length
-    :param rotation_bounds: the bounds for the angles
-    :param translation_bounds: the bounds for the translations
-    :param render_mode_train: the render mode to use for training environments
-    :param render_mode_test: the render mode to use for test environments
-    :param render_mode_watch: the render mode to use for environments that are used to watch agent performance
-    :param venv_type: the type of vectorized environment to use
-    :param seed: the seed to use
-    :param n_stack: the number of observations to stack in a single observation
-    :param project_to_x_translation: constrains the action space to only x translation
-    :param remove_rotation_actions: removes the rotation actions from the action space
-    :param make_kwargs: additional keyword arguments to pass to the environment creation function
+class AddObservationsWrapper(Wrapper, ABC):
+    """When implementing it, make sure that additional_obs_space is available
+    before super().__init__(env) is called.
     """
 
+    def __init__(self, env: LabelmapEnv | Env, additional_obs: Observation):
+        super().__init__(env)
+        self.additional_obs = additional_obs
+        if isinstance(self.env.observation_space, Box) and isinstance(
+            self.additional_obs_space,
+            Box,
+        ):
+            self.observation_space = ConcatenatedArrayObservation.concatenate_boxes(
+                [self.env.observation_space, self.additional_obs_space],
+            )
+        else:
+            raise ValueError(
+                f"Observation spaces are not of type Box: {type(self.env.observation_space)}, {type(self.additional_obs_space)}",
+            )
+
+    @property
+    @abstractmethod
+    def additional_obs_space(self) -> gym.spaces:
+        pass
+
+    @abstractmethod
+    def get_additional_obs(
+        self,
+    ) -> np.ndarray:
+        pass
+
+    def observation(
+        self,
+        observation: np.ndarray,
+    ) -> np.ndarray:
+        additional_obs = self.get_additional_obs()
+        try:
+            full_obs = np.concatenate([observation, additional_obs])
+        except ValueError:
+            raise ValueError(
+                f"Observation spaces are not of type Box: {type(observation)}, {type(additional_obs)}",
+            ) from None
+        return full_obs
+
+
+class AddRewardDetailsWrapper(AddObservationsWrapper):
+    @property
+    def additional_obs_space(self) -> gym.spaces:
+        return self._additional_obs_space
+
+    def __init__(
+        self,
+        env: LabelmapEnv | Env[ObsType, ActType],
+        num_steps_to_observe: int | None = None,
+        additional_obs: Observation = ActionRewardObservation().to_array_observation(),
+    ):
+        """Adds the action that would lead to the highest image variance to the observation.
+        In focus-stigmation agents, this helps in the initial exploratory phase of episodes, as it
+        allows wandering around the state space without worrying about losing track of the
+        best image found so far.
+
+        :param env:
+        :param num_steps_to_observe: Number of steps to observe to pick the highest reward state.
+            If None, all steps are observed.
+        """
+        self._additional_obs_space = additional_obs.observation_space
+        # don't move above, see comment in AddObservationsWrapper
+        super().__init__(env, additional_obs)
+        self.num_steps_to_observe = num_steps_to_observe
+
+        self.reset_wrapper()
+
+    def reset_wrapper(self) -> None:
+        if self.num_steps_to_observe is None:
+            self.rewards: list[float] = []
+            self.states: list[LabelmapStateAction] = []
+        else:
+            self.rewards = deque(maxlen=self.num_steps_to_observe)  # type: ignore
+            self.states = deque(maxlen=self.num_steps_to_observe)  # type: ignore
+
+    def reset(self, **kwargs: Any) -> tuple[ObsType, dict[str, Any]]:
+        self.reset_wrapper()
+        obs, info = super().reset(**kwargs)
+        updated_obs = cast(ObsType, self.observation(obs))
+        return updated_obs, info
+
+    def step(
+        self,
+        action: ActType,
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        updated_obs = cast(ObsType, self.observation(obs))
+        return updated_obs, reward, terminated, truncated, info
+
+    def _update_observation_fields(self) -> None:
+        tissue_clusters = TissueClusters.from_labelmap_slice(
+            self.env.cur_state_action.labels_2d_slice,
+        )
+        clustering_reward = anatomy_based_rwd(tissue_clusters=tissue_clusters)
+        self.rewards.append(clustering_reward)
+        self.states.append(self.env.cur_state_action)
+        self.highest_rew_state_arr = self.states[np.argmax(self.rewards)]
+
+    def get_additional_obs(self) -> np.ndarray:
+        # base_obs is not used, instead we directly access the current image from the env
+        self._update_observation_fields()
+        return self.additional_obs.compute_observation(self.highest_rew_state_arr)
+
+
+class ArmscanEnvFactory(EnvFactory):
     def __init__(
         self,
         name2volume: dict[str, sitk.Image],
@@ -167,8 +293,28 @@ class ArmscanEnvFactory(EnvFactory):
         n_stack: int = 1,
         project_actions_to: Literal["x", "y", "xy"] | None = None,
         apply_volume_transformation: bool = False,
+        add_reward_details: bool = False,
         **make_kwargs: Any,
     ) -> None:
+        """:param name2volume: the gymnasium task/environment identifier
+        :param observation: the observation to use
+        :param reward_metric: the reward metric to use
+        :param termination_criterion: the termination criterion to use
+        :param slice_shape: the shape of the slice
+        :param max_episode_len: the maximum episode length
+        :param rotation_bounds: the bounds for the angles
+        :param translation_bounds: the bounds for the translations
+        :param render_mode_train: the render mode to use for training environments
+        :param render_mode_test: the render mode to use for test environments
+        :param render_mode_watch: the render mode to use for environments that are used to watch agent performance
+        :param venv_type: the type of vectorized environment to use
+        :param seed: the seed to use
+        :param n_stack: the number of observations to stack in a single observation
+        :param project_actions_to: constrains the action space to only x translation
+        :param apply_volume_transformation: whether to apply transformations to the volume for data augmentation
+        :param add_reward_details: whether to add reward details to the observation
+        :param make_kwargs: additional keyword arguments to pass to the environment creation function
+        """
         super().__init__(venv_type)
         self.name2volume = name2volume
         self.observation = observation
@@ -187,6 +333,7 @@ class ArmscanEnvFactory(EnvFactory):
         self.n_stack = n_stack
         self.project_actions_to = project_actions_to
         self.apply_volume_transformation = apply_volume_transformation
+        self.add_reward_details = add_reward_details
         self.make_kwargs = make_kwargs
 
     def _create_kwargs(self) -> dict:
@@ -216,35 +363,13 @@ class ArmscanEnvFactory(EnvFactory):
             apply_volume_transformation=self.apply_volume_transformation,
         )
 
+        if self.add_reward_details:
+            env = AddRewardDetailsWrapper(
+                env,
+                additional_obs=ActionRewardObservation(
+                    action_shape=env.action_space.shape,
+                ).to_array_observation(),
+            )
         if self.n_stack > 1:
             env = PatchedFrameStackObservation(env, self.n_stack)
         return env
-
-
-# Todo: Issue on gymnasium for not overwriting reset method
-class PatchedWrapper(Wrapper[np.ndarray, float, np.ndarray, np.ndarray]):
-    def __init__(self, env: LabelmapEnv | Env):
-        super().__init__(env)
-        # Helps with IDE autocompletion
-        self.env = cast(LabelmapEnv, env)
-
-    def reset(self, **kwargs: Any) -> tuple[np.ndarray, dict[str, Any]]:
-        return self.env.reset(**kwargs)
-
-    def __getattr__(self, item: str) -> Any:
-        return getattr(self.env, item)
-
-
-class PatchedActionWrapper(PatchedWrapper, ABC):
-    def __init__(self, env: Env[ObsType, ActType]):
-        super().__init__(env)
-
-    def step(
-        self,
-        action: ActType,
-    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
-        return self.env.step(self.action(action))
-
-    @abstractmethod
-    def action(self, action: ActType) -> np.ndarray:
-        pass

@@ -91,20 +91,18 @@ class ConcatenatedArrayObservation(ArrayObservation[TStateAction], Generic[TStat
     def compute_observation(self, state: TStateAction) -> np.ndarray:
         return np.concatenate(
             [obs.compute_observation(state) for obs in self.array_observations],
-            axis=0,
+            axis=1,
         )
 
     @cached_property
     def observation_space(self) -> gym.spaces.Box:
+        return self.concatenate_boxes([obs.observation_space for obs in self.array_observations])
+
+    @staticmethod
+    def concatenate_boxes(boxes: list[gym.spaces.Box]) -> gym.spaces.Box:
         return gym.spaces.Box(
-            low=np.concatenate(
-                [obs.observation_space.low for obs in self.array_observations],
-                axis=0,
-            ),
-            high=np.concatenate(
-                [obs.observation_space.high for obs in self.array_observations],
-                axis=0,
-            ),
+            low=np.concatenate([box.low for box in boxes], axis=0),
+            high=np.concatenate([box.high for box in boxes], axis=0),
         )
 
 

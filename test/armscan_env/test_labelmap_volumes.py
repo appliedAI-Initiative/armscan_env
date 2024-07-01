@@ -6,7 +6,7 @@ import SimpleITK as sitk
 from armscan_env.clustering import TissueLabel
 from armscan_env.config import get_config
 from armscan_env.envs.state_action import ManipulatorAction
-from armscan_env.volumes.slicing import slice_volume
+from armscan_env.volumes.slicing import get_volume_slice
 
 config = get_config()
 
@@ -39,7 +39,7 @@ class TestLabelMaps:
     def test_labelmap_properly_sliced(labelmaps):
         for labelmap, _i in labelmaps:
             slice_shape = (labelmap.GetSize()[0], labelmap.GetSize()[2])
-            sliced_volume = slice_volume(
+            sliced_volume = get_volume_slice(
                 volume=labelmap,
                 slice_shape=slice_shape,
                 action=ManipulatorAction(

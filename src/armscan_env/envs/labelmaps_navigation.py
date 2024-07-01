@@ -16,7 +16,11 @@ from armscan_env.envs.base import (
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
 from armscan_env.envs.state_action import LabelmapStateAction, ManipulatorAction
 from armscan_env.util.visualizations import show_clusters
-from armscan_env.volumes.slicing import EulerTransform, slice_volume, transform_volume
+from armscan_env.volumes.slicing import (
+    EulerTransform,
+    create_transformed_volume,
+    get_volume_slice,
+)
 from celluloid import Camera
 from IPython.core.display import HTML
 from matplotlib import pyplot as plt
@@ -240,7 +244,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             manipulator_action = self.get_manipulator_action_from_normalized_action(action)
         else:
             manipulator_action = action
-        sliced_volume = slice_volume(
+        sliced_volume = get_volume_slice(
             volume=self.cur_labelmap_volume,
             slice_shape=self._slice_shape,
             action=manipulator_action,
@@ -282,9 +286,9 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             bounds[1] += abs(volume_transformation.rotation[1])
             self.rotation_bounds = tuple(bounds)  # type: ignore
         return (
-            transform_volume(
+            create_transformed_volume(
                 volume=volume,
-                action=volume_transformation,
+                transformation_action=volume_transformation,
             ),
             transformed_optimal_action,
         )

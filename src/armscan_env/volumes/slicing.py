@@ -47,11 +47,13 @@ def padding(original_array: np.ndarray) -> np.ndarray:
 
 
 class EulerTransform:
-    def __init__(self, action: ManipulatorAction, origin: np.ndarray = np.zeros(3)):
+    def __init__(self, action: ManipulatorAction, origin: np.ndarray | None = None):
+        if origin is None:
+            origin = np.zeros(3)
         self.action = action
         self.origin = origin
 
-    def get_transform(self) -> np.ndarray:
+    def get_transform_matrix(self) -> np.ndarray:
         # Euler's transformation
         # Rotation is defined by three rotations around z1, x2, z2 axis
         th_z1 = np.deg2rad(self.action.rotation[0])
@@ -92,9 +94,9 @@ class EulerTransform:
 
     def transform_action(self, relative_action: ManipulatorAction) -> ManipulatorAction:
         """Transform an action to be relative to the new coordinate system."""
-        volume_transform_matrix = self.get_transform()
+        volume_transform_matrix = self.get_transform_matrix()
 
-        action_matrix = EulerTransform(relative_action).get_transform()
+        action_matrix = EulerTransform(relative_action).get_transform_matrix()
         new_action_matrix = np.dot(
             np.linalg.inv(volume_transform_matrix),
             action_matrix,
@@ -119,30 +121,48 @@ class EulerTransform:
 
 
 class TransformedVolume(sitk.Image):
-    def __init__(self, volume: sitk.Image, action: ManipulatorAction):
-        super().__init__(volume)
-        self.transformation_action = action
+    """Represents a volume that has been transformed by an action.
+
+    Should only ever be instantiated by `create_transformed_volume`.
+    """
+
+    def __init__(self, *args, transformation_action: ManipulatorAction, _private: int):
+        if _private != 42:
+            raise ValueError(
+                "TransformedVolume should only be instantiated by create_transformed_volume.",
+            )
+        super().__init__(*args)
+        self._transformation_action = transformation_action
+
+    @property
+    def transformation_action(self) -> ManipulatorAction | None:
+        return self._transformation_action
 
 
-def transform_volume(
+def create_transformed_volume(
     volume: sitk.Image,
-    action: ManipulatorAction,
+    transformation_action: ManipulatorAction,
 ) -> TransformedVolume:
-    """Trasnform a 3D volume with arbitrary rotation and translation.
+    """Transform a 3D volume with arbitrary rotation and translation.
 
     :param volume: 3D volume to be transformed
-    :param action: action to transform the volume
+    :param transformation_action: action to transform the volume
     :return: the sliced volume.
     """
+    if isinstance(volume, TransformedVolume):
+        raise ValueError(
+            f"This operation should only be performed on a non-transformed volume "
+            f"but got an instance of: {volume.__class__.__name__}.",
+        )
+
     origin = np.array(volume.GetOrigin())
-    euler_transform = EulerTransform(action, origin)
-    eul_tr = euler_transform.get_transform()
+    transform_matrix = EulerTransform(transformation_action, origin).get_transform_matrix()
 
     # Define plane's coordinate system
-    e1 = eul_tr[0][:3]
-    e2 = eul_tr[1][:3]
-    e3 = eul_tr[2][:3]
-    img_o = eul_tr[:, -1:].flatten()[:3]  # origin of the image plane
+    e1 = transform_matrix[0][:3]
+    e2 = transform_matrix[1][:3]
+    e3 = transform_matrix[2][:3]
+    img_o = transform_matrix[:, -1:].flatten()[:3]  # origin of the image plane
 
     direction = np.stack([e1, e2, e3], axis=0).flatten()
 
@@ -157,12 +177,17 @@ def transform_volume(
 
     # Resample the volume on the arbitrary plane
     transformed_volume = resampler.Execute(volume)
-    # Todo: hack --> needed to break rotation dependency
-    return TransformedVolume(transformed_volume, action)
+    # needed to deal with rotation dependency of the volume
+    return TransformedVolume(
+        transformed_volume,
+        transformation_action=transformation_action,
+        _private=42,
+    )
 
 
-def slice_volume(
-    volume: sitk.Image | TransformedVolume,
+def get_volume_slice(
+    volume: sitk.Image,
+    # TODO: shouldn't there be a default shape, like the native shape of the volume itself?
     slice_shape: tuple[int, int],
     action: ManipulatorAction,
 ) -> sitk.Image:
@@ -175,19 +200,21 @@ def slice_volume(
     """
     o = np.array(volume.GetOrigin())
 
-    # Todo: hack --> the action attribute set in transform_volume; find a better solution later
-    if hasattr(volume, "transformation_action"):
-        volume_transformation = EulerTransform(volume.transformation_action).get_transform()
-        action_transformation = EulerTransform(action).get_transform()
-        detransformed_action = np.dot(volume_transformation, action_transformation)
+    if isinstance(volume, TransformedVolume):
+        # TODO: why is origin not used here?
+        volume_transformation = EulerTransform(volume.transformation_action).get_transform_matrix()
+        action_transformation = EulerTransform(action).get_transform_matrix()
+        # TODO: why not use action_transformation.transform_action ?
+        inverse_transformed_action = np.dot(volume_transformation, action_transformation)
         action_rotation = EulerTransform.get_angles_from_rotation_matrix(
-            detransformed_action[:3, :3],
+            inverse_transformed_action[:3, :3],
         )
-        action_translation = (detransformed_action[:3, 3] - volume_transformation[:3, 3])[:2]
+        action_translation = (inverse_transformed_action[:3, 3] - volume_transformation[:3, 3])[:2]
         action = ManipulatorAction(rotation=action_rotation, translation=(action_translation))
 
+    # TODO: seems to be recomputed as action_transformation in block above - can it be computed once instead?
     euler_transform = EulerTransform(action, o)
-    eul_tr = euler_transform.get_transform()
+    eul_tr = euler_transform.get_transform_matrix()
 
     # Define plane's coordinate system
     rotation = eul_tr[:3, :3]

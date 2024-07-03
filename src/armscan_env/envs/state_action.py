@@ -85,7 +85,7 @@ class ManipulatorAction:
 
     def project_to_positive(self) -> None:
         """Project the action to the positive octant.
-        This is needed when transformin the optimal action accordingly to the random volume transformation.
+        This is needed when transforming the optimal action accordingly to the random volume transformation.
         It might be, that for a negative translation and/or a negative z-rotation, the coordinates defining the
         optimal action land in negative space. Since the action defines a coordinate frame which infers a plane
         (x-z plane, y normal to the plane), assuming that this plane is still intercepting the positive octant,

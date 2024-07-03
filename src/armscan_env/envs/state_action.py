@@ -31,7 +31,10 @@ class ManipulatorAction:
         rotation = np.zeros(2)
         translation = np.zeros(2)
         if self.translation[0] < 0 or self.translation[1] < 0:
-            log.debug("Projecting to positive because negative defined translation")
+            log.debug(
+                "Action contains a negative translation, out of bounds.\n"
+                "Projecting the origin of the viewing plane to positive octant.",
+            )
             self.project_to_positive()
         for i in range(2):
             if rotation_bounds[i] == 0.0:
@@ -81,7 +84,16 @@ class ManipulatorAction:
         return cls(rotation=tuple(rotation), translation=tuple(translation))  # type: ignore
 
     def project_to_positive(self) -> None:
-        """Project the action to the positive octant."""
+        """Project the action to the positive octant.
+        This is needed when transformin the optimal action accordingly to the random volume transformation.
+        It might be, that for a negative translation and/or a negative z-rotation, the coordinates defining the
+        optimal action land in negative space. Since the action defines a coordinate frame which infers a plane
+        (x-z plane, y normal to the plane), assuming that this plane is still intercepting the positive octant,
+        it is possible to redefine the action in positive coordinates by projecting it into the positive octant.
+
+        It needs to be tested, that the volume transformations keep the optimal action in a reachable space.
+        Volume transformations are used for data augmentation only, so can be defined in the most convenient way.
+        """
         tx, ty = self.translation
         thz, thx = self.rotation
         log.debug(f"Translation before projection: {self.translation}")
@@ -95,6 +107,22 @@ class ManipulatorAction:
         translation = (tx, ty)
         log.debug(f"Translation after projection: {translation}")
         self.translation = translation
+
+    @classmethod
+    def sample(
+        cls,
+        rotation_range: tuple[float, float] = (20.0, 5.0),
+        translation_range: tuple[float, float] = (5.0, 5.0),
+    ) -> Self:
+        rotation = (
+            np.random.uniform(-rotation_range[0], rotation_range[0]),
+            np.random.uniform(-rotation_range[1], rotation_range[1]),
+        )
+        translation = (
+            np.random.uniform(-translation_range[0], translation_range[0]),
+            np.random.uniform(-translation_range[1], translation_range[1]),
+        )
+        return cls(rotation=rotation, translation=translation)
 
 
 @dataclass(kw_only=True)

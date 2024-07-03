@@ -1,4 +1,5 @@
 import logging
+from typing import Any
 
 import numpy as np
 import SimpleITK as sitk
@@ -126,7 +127,7 @@ class TransformedVolume(sitk.Image):
     Should only ever be instantiated by `create_transformed_volume`.
     """
 
-    def __init__(self, *args, transformation_action: ManipulatorAction, _private: int):
+    def __init__(self, *args: Any, transformation_action: ManipulatorAction, _private: int):
         if _private != 42:
             raise ValueError(
                 "TransformedVolume should only be instantiated by create_transformed_volume.",

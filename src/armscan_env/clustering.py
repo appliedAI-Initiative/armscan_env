@@ -37,6 +37,8 @@ class DataCluster:
     datapoints: list[tuple[float, float]] | np.ndarray
     center: tuple[np.floating[Any], np.floating[Any]]
 
+    # ToDo: Make a custom __hash__ method for the class that deals with lists
+
 
 @dataclass(kw_only=True)
 class TissueClusters:
@@ -45,6 +47,8 @@ class TissueClusters:
     bones: list[DataCluster]
     tendons: list[DataCluster]
     ulnar: list[DataCluster]
+
+    # ToDo: Make a custom __hash__ method for the class that deals with lists
 
     def get_cluster_for_label(self, label: TissueLabel) -> list[DataCluster]:
         """Get the clusters for a given tissue label."""

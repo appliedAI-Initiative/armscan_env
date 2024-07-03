@@ -19,7 +19,10 @@ from armscan_env.envs.labelmaps_navigation import (
     LabelmapEnv,
     LabelmapEnvTerminationCriterion,
 )
-from armscan_env.envs.observations import ActionRewardObservation, MultiBoxSpace
+from armscan_env.envs.observations import (
+    ActionRewardObservation,
+    MultiBoxSpace,
+)
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward, anatomy_based_rwd
 from armscan_env.envs.state_action import LabelmapStateAction
 
@@ -164,14 +167,42 @@ class PatchedFrameStackObservation(Wrapper):
         return getattr(self.env, item)
 
 
+class PatchedFlattenObservation(PatchedWrapper):
+    """Flattens the environment's observation space and each observation from ``reset`` and ``step`` functions.
+    Had to copy-paste and adjust.
+    """
+
+    def __init__(self, env: Env[ObsType, ActType]):
+        PatchedWrapper.__init__(self, env)
+        observation_space = gym.spaces.utils.flatten_space(env.observation_space)
+        func = lambda obs: gym.spaces.utils.flatten(env.observation_space, obs)
+        if observation_space is not None:
+            self.observation_space = observation_space
+        self.func = func
+
+    def reset(self, **kwargs: Any) -> tuple[ObsType, dict[str, Any]]:
+        obs, info = self.env.reset(**kwargs)
+        return self.observation(obs), info
+
+    def step(
+        self,
+        action: ActType,
+    ) -> tuple[ObsType, SupportsFloat, bool, bool, dict[str, Any]]:
+        observation, reward, terminated, truncated, info = self.env.step(action)
+        return self.observation(observation), reward, terminated, truncated, info
+
+    def observation(self, observation: ObsType) -> Any:
+        """Apply function to the observation."""
+        return self.func(observation)
+
+
 class AddObservationsWrapper(Wrapper, ABC):
     """When implementing it, make sure that additional_obs_space is available
     before super().__init__(env) is called.
     """
 
-    def __init__(self, env: LabelmapEnv | Env, additional_obs: Observation):
+    def __init__(self, env: LabelmapEnv | Env):
         super().__init__(env)
-        self.additional_obs = additional_obs
         if isinstance(self.env.observation_space, Box) and isinstance(
             self.additional_obs_space,
             Box,
@@ -190,7 +221,7 @@ class AddObservationsWrapper(Wrapper, ABC):
         pass
 
     @abstractmethod
-    def get_additional_obs(
+    def get_additional_obs_array(
         self,
     ) -> np.ndarray:
         pass
@@ -199,7 +230,7 @@ class AddObservationsWrapper(Wrapper, ABC):
         self,
         observation: np.ndarray,
     ) -> np.ndarray:
-        additional_obs = self.get_additional_obs()
+        additional_obs = self.get_additional_obs_array()
         try:
             full_obs = np.concatenate([observation, additional_obs])
         except ValueError:
@@ -216,9 +247,8 @@ class AddRewardDetailsWrapper(AddObservationsWrapper):
 
     def __init__(
         self,
-        env: LabelmapEnv | Env[ObsType, ActType],
+        env: LabelmapEnv,
         num_steps_to_observe: int | None = None,
-        additional_obs: Observation = ActionRewardObservation().to_array_observation(),
     ):
         """Adds the action that would lead to the highest image variance to the observation.
         In focus-stigmation agents, this helps in the initial exploratory phase of episodes, as it
@@ -229,9 +259,10 @@ class AddRewardDetailsWrapper(AddObservationsWrapper):
         :param num_steps_to_observe: Number of steps to observe to pick the highest reward state.
             If None, all steps are observed.
         """
-        self._additional_obs_space = additional_obs.observation_space
+        self.additional_obs = ActionRewardObservation(env.action_space.shape).to_array_observation()
+        self._additional_obs_space = self.additional_obs.observation_space
         # don't move above, see comment in AddObservationsWrapper
-        super().__init__(env, additional_obs)
+        super().__init__(env)
         self.num_steps_to_observe = num_steps_to_observe
 
         self.reset_wrapper()
@@ -267,7 +298,7 @@ class AddRewardDetailsWrapper(AddObservationsWrapper):
         self.states.append(self.env.cur_state_action)
         self.highest_rew_state_arr = self.states[np.argmax(self.rewards)]
 
-    def get_additional_obs(self) -> np.ndarray:
+    def get_additional_obs_array(self) -> np.ndarray:
         # base_obs is not used, instead we directly access the current image from the env
         self._update_observation_fields()
         return self.additional_obs.compute_observation(self.highest_rew_state_arr)
@@ -363,13 +394,11 @@ class ArmscanEnvFactory(EnvFactory):
             apply_volume_transformation=self.apply_volume_transformation,
         )
 
+        if self.n_stack > 1:
+            env = PatchedFrameStackObservation(env, self.n_stack)
+        env = PatchedFlattenObservation(env)
         if self.add_reward_details:
             env = AddRewardDetailsWrapper(
                 env,
-                additional_obs=ActionRewardObservation(
-                    action_shape=env.action_space.shape,
-                ).to_array_observation(),
             )
-        if self.n_stack > 1:
-            env = PatchedFrameStackObservation(env, self.n_stack)
         return env

@@ -48,6 +48,7 @@ initialised
 rgb
 ansi
 voxel
+voxels
 convolutional
 preprocessed
 subspaces

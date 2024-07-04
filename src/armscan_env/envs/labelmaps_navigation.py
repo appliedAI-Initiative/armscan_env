@@ -34,7 +34,7 @@ from gymnasium.spaces import Box, Space
 
 log = logging.getLogger(__name__)
 
-_VOL_NAME_TO_OPTIMAL_ACTION = {
+VOL_NAME_TO_OPTIMAL_ACTION = {
     "1": ManipulatorAction(rotation=(19.3, 0.0), translation=(0.0, 140.0)),
     "2": ManipulatorAction(rotation=(5, 0), translation=(0, 112)),
 }
@@ -308,7 +308,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             )
         sampled_image_name = np.random.choice(list(self.name2volume.keys()))
         self._cur_labelmap_name = sampled_image_name
-        volume_optimal_action = deepcopy(_VOL_NAME_TO_OPTIMAL_ACTION[sampled_image_name])
+        volume_optimal_action = deepcopy(VOL_NAME_TO_OPTIMAL_ACTION[sampled_image_name])
 
         if self._apply_volume_transformation:
             volume_transformation_action = ManipulatorAction.sample()

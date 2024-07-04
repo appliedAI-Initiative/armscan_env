@@ -19,6 +19,12 @@ class __Configuration(DefaultDataConfiguration):
             check_existence=True,
         )
 
+    def count_labels(self) -> int:
+        labels_dir = self.get_labels_basedir()
+        return len(
+            [f for f in os.listdir(labels_dir) if os.path.isfile(os.path.join(labels_dir, f))],
+        )
+
     def get_mri_path(self, mri_number: int) -> str:
         mri_path = os.path.join(self.get_mri_basedir(), f"{mri_number:05d}.nii")
         return self._adjusted_path(mri_path, relative=False, check_existence=True)
@@ -29,6 +35,10 @@ class __Configuration(DefaultDataConfiguration):
             relative=False,
             check_existence=True,
         )
+
+    def count_mri(self) -> int:
+        mri_dir = self.get_mri_basedir()
+        return len([f for f in os.listdir(mri_dir) if os.path.isfile(os.path.join(mri_dir, f))])
 
 
 class ConfigProvider(ConfigProviderBase[__Configuration]):

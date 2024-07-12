@@ -79,7 +79,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         translation_bounds: tuple[float | None, float | None] = (None, None),
         render_mode: Literal["plt", "animation"] | None = None,
         seed: int | None = DEFAULT_SEED,
-        project_actions_to: Literal["x", "y", "xy"] | None = None,
+        project_actions_to: Literal["x", "y", "xy", "zy"] | None = None,
         apply_volume_transformation: bool = False,
     ):
         if not name2volume:
@@ -122,7 +122,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             )
 
     @property
-    def project_actions_to(self) -> Literal["x", "y", "xy"] | None:
+    def project_actions_to(self) -> Literal["x", "y", "xy", "zy"] | None:
         return self._project_actions_to
 
     def get_optimal_action(self) -> ManipulatorAction:
@@ -146,6 +146,8 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
                 return [3]
             case "xy":
                 return [2, 3]
+            case "zy":
+                return [0, 3]
             case _:
                 raise ValueError(f"Unknown {self._project_actions_to=}")
 

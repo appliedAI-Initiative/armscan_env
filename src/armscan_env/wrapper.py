@@ -318,7 +318,7 @@ class ArmscanEnvFactory(EnvFactory):
         venv_type: VectorEnvType = VectorEnvType.SUBPROC_SHARED_MEM_AUTO,
         seed: int | None = None,
         n_stack: int = 1,
-        project_actions_to: Literal["x", "y", "xy"] | None = None,
+        project_actions_to: Literal["x", "y", "xy", "zy"] | None = None,
         apply_volume_transformation: bool = False,
         add_reward_details: bool = False,
         **make_kwargs: Any,

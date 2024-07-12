@@ -7,7 +7,7 @@ from armscan_env.envs.labelmaps_navigation import VOL_NAME_TO_OPTIMAL_ACTION
 from armscan_env.envs.rewards import anatomy_based_rwd
 from armscan_env.envs.state_action import ManipulatorAction
 from armscan_env.volumes.loading import load_sitk_volumes
-from armscan_env.volumes.slicing import get_volume_slice
+from armscan_env.volumes.slicing import create_transformed_volume, get_volume_slice
 
 config = get_config()
 
@@ -45,7 +45,7 @@ class TestLabelMaps:
                     translation=(0.0, -labelmap.GetOrigin()[1]),
                 ),
             )
-            sliced_img = sitk.GetArrayFromImage(sliced_volume)[:, 0, :]
+            sliced_img = sitk.GetArrayFromImage(sliced_volume)
             assert not np.all(sliced_img == 0)
 
     @staticmethod
@@ -58,7 +58,33 @@ class TestLabelMaps:
                 slice_shape=slice_shape,
                 action=optimal_action,
             )
-            sliced_img = sitk.GetArrayFromImage(sliced_volume)[:, 0, :]
+            sliced_img = sitk.GetArrayFromImage(sliced_volume)
             cluster = TissueClusters.from_labelmap_slice(sliced_img.T)
             reward = anatomy_based_rwd(cluster)
-            assert reward < 0.1
+            assert reward > -0.1
+
+    @staticmethod
+    def test_rand_transformations(labelmaps):
+        for i, labelmap in enumerate(labelmaps):
+            optimal_action = VOL_NAME_TO_OPTIMAL_ACTION[str(i + 1)]
+            slice_shape = (labelmap.GetSize()[0], labelmap.GetSize()[2])
+            j = 0
+            while j < 10:
+                volume_transformation_action = ManipulatorAction.sample()
+                transformed_labelmap = create_transformed_volume(
+                    volume=labelmap,
+                    transformation_action=volume_transformation_action,
+                )
+                transformed_optimal_action = transformed_labelmap.transform_action(optimal_action)
+                sliced_volume = get_volume_slice(
+                    volume=transformed_labelmap,
+                    slice_shape=slice_shape,
+                    action=transformed_optimal_action,
+                )
+                sliced_img = sitk.GetArrayFromImage(sliced_volume)
+                cluster = TissueClusters.from_labelmap_slice(sliced_img.T)
+                reward = anatomy_based_rwd(cluster)
+                j += 1
+                assert (
+                    reward > -0.1
+                ), f"Reward: {reward} for volume {i + 1} and transformation {volume_transformation_action}"

@@ -54,6 +54,9 @@ class PatchedWrapper(Wrapper[np.ndarray, float, np.ndarray, np.ndarray]):
     def reset(self, **kwargs: Any) -> tuple[ObsType, dict[str, Any]]:
         return self.env.reset(**kwargs)
 
+    def render(self, **kwargs: Any) -> Any:
+        return self.env.render(**kwargs)
+
     def __getattr__(self, item: str) -> Any:
         return getattr(self.env, item)
 
@@ -73,7 +76,7 @@ class PatchedActionWrapper(PatchedWrapper, ABC):
         pass
 
 
-class PatchedFrameStackObservation(Wrapper):
+class PatchedFrameStackObservation(PatchedWrapper):
     def __init__(
         self,
         env: Env[ObsType, ActType],
@@ -158,13 +161,6 @@ class PatchedFrameStackObservation(Wrapper):
             concatenate(self.env.observation_space, self.obs_queue, self.stacked_obs),
         )
         return updated_obs, info
-
-    def render(self, **kwargs: Any) -> Any:
-        return self.env.render(**kwargs)
-
-    # Like in PatchedWrapper
-    def __getattr__(self, item: str) -> Any:
-        return getattr(self.env, item)
 
 
 class PatchedFlattenObservation(PatchedWrapper):

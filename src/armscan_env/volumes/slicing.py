@@ -8,45 +8,6 @@ from armscan_env.envs.state_action import ManipulatorAction
 log = logging.getLogger(__name__)
 
 
-def padding(original_array: np.ndarray) -> np.ndarray:
-    """Pad an array to make it square.
-
-    :param original_array: array to pad
-    :return: padded array.
-    """
-    # Find the maximum dimension
-    max_dim = max(original_array.shape)
-
-    # Calculate padding for each dimension (left and right)
-    padding_x_left = (max_dim - original_array.shape[0]) // 2
-    padding_x_right = max_dim - original_array.shape[0] - padding_x_left
-
-    padding_y_left = (max_dim - original_array.shape[1]) // 2
-    padding_y_right = max_dim - original_array.shape[1] - padding_y_left
-
-    padding_z_left = (max_dim - original_array.shape[2]) // 2
-    padding_z_right = max_dim - original_array.shape[2] - padding_z_left
-
-    # Pad the array with zeros
-    padded_array = np.pad(
-        original_array,
-        (
-            (padding_x_left, padding_x_right),
-            (padding_y_left, padding_y_right),
-            (padding_z_left, padding_z_right),
-        ),
-        mode="constant",
-    )
-
-    # Verify the shapes
-    log.debug(
-        f"Original Array Shape: {original_array.shape}\n"
-        f"Padded Array Shape: {padded_array.shape}",
-    )
-
-    return padded_array
-
-
 class EulerTransform:
     def __init__(self, action: ManipulatorAction, origin: np.ndarray | None = None):
         if origin is None:
@@ -93,33 +54,6 @@ class EulerTransform:
 
         return np.array([th_z1, th_x2])
 
-    def transform_action(self, relative_action: ManipulatorAction) -> ManipulatorAction:
-        """Transform an action to be relative to the new coordinate system."""
-        volume_transform_matrix = self.get_transform_matrix()
-
-        action_matrix = EulerTransform(relative_action).get_transform_matrix()
-        new_action_matrix = np.dot(
-            np.linalg.inv(volume_transform_matrix),
-            action_matrix,
-        )  # 1_A_s = 1_T_0 * 0_A_s
-
-        # new_action_translation = action_matrix[:2, 3] - volume_transform_matrix[:2, 3]
-        new_action_rotation = self.get_angles_from_rotation_matrix(new_action_matrix[:3, :3])
-        new_action_translation = new_action_matrix[:2, 3]
-
-        transformed_action = ManipulatorAction(
-            rotation=new_action_rotation,
-            translation=new_action_translation,
-        )
-
-        log.debug(
-            f"Random transformation: {self.action}\n"
-            f"Original action: {relative_action}\n"
-            f"Transformed action: {transformed_action}\n",
-        )
-
-        return transformed_action
-
 
 class TransformedVolume(sitk.Image):
     """Represents a volume that has been transformed by an action.
@@ -127,17 +61,71 @@ class TransformedVolume(sitk.Image):
     Should only ever be instantiated by `create_transformed_volume`.
     """
 
-    def __init__(self, *args: Any, transformation_action: ManipulatorAction, _private: int):
+    def __init__(self, *args: Any, transformation_action: ManipulatorAction | None, _private: int):
         if _private != 42:
             raise ValueError(
                 "TransformedVolume should only be instantiated by create_transformed_volume.",
             )
+        if transformation_action is None:
+            transformation_action = ManipulatorAction(rotation=(0.0, 0.0), translation=(0.0, 0.0))
         super().__init__(*args)
         self._transformation_action = transformation_action
 
     @property
-    def transformation_action(self) -> ManipulatorAction | None:
+    def transformation_action(self) -> ManipulatorAction:
         return self._transformation_action
+
+    def transform_action(self, relative_action: ManipulatorAction) -> ManipulatorAction:
+        """Transform an action by the inverse of the volume transformation to be relative to the new coordinate
+        system.
+        """
+        origin = np.array(self.GetOrigin())
+
+        volume_rotation = np.deg2rad(self.transformation_action.rotation)
+        volume_translation = self.transformation_action.translation
+        volume_transform = sitk.Euler3DTransform(
+            origin,
+            volume_rotation[1],
+            0,
+            volume_rotation[0],
+            (*volume_translation, 0),
+        )
+
+        inverse_volume_transform = volume_transform.GetInverse()
+        inverse_volume_transform_matrix = np.eye(4)
+        inverse_volume_transform_matrix[:3, :3] = np.array(
+            inverse_volume_transform.GetMatrix(),
+        ).reshape(3, 3)
+        inverse_volume_transform_matrix[:3, 3] = inverse_volume_transform.GetTranslation()
+
+        action_rotation = np.deg2rad(relative_action.rotation)
+        action_translation = relative_action.translation
+        action_transform = sitk.Euler3DTransform(
+            origin,
+            action_rotation[1],
+            0,
+            action_rotation[0],
+            (*action_translation, 0),
+        )
+
+        action_transform_matrix = np.eye(4)
+        action_transform_matrix[:3, :3] = np.array(action_transform.GetMatrix()).reshape(3, 3)
+        action_transform_matrix[:3, 3] = action_transform.GetTranslation()
+
+        # 1_A_s = 1_T_0 * 0_A_s
+        new_action_matrix = np.dot(inverse_volume_transform_matrix, action_transform_matrix)
+        transformed_action = ManipulatorAction(
+            rotation=EulerTransform.get_angles_from_rotation_matrix(new_action_matrix[:3, :3]),
+            translation=new_action_matrix[:2, 3],
+        )
+
+        log.debug(
+            f"Random transformation: {self.transformation_action}\n"
+            f"Original action: {relative_action}\n"
+            f"Transformed action: {transformed_action}\n",
+        )
+
+        return transformed_action
 
 
 def create_transformed_volume(
@@ -157,30 +145,17 @@ def create_transformed_volume(
         )
 
     origin = np.array(volume.GetOrigin())
-    transform_matrix = EulerTransform(transformation_action, origin).get_transform_matrix()
+    rotation = np.deg2rad(transformation_action.rotation)
+    translation = transformation_action.translation
 
-    # Define plane's coordinate system
-    e1 = transform_matrix[0][:3]
-    e2 = transform_matrix[1][:3]
-    e3 = transform_matrix[2][:3]
-    img_o = transform_matrix[:, -1:].flatten()[:3]  # origin of the image plane
-
-    direction = np.stack([e1, e2, e3], axis=0).flatten()
-
-    resampler = sitk.ResampleImageFilter()
-    spacing = volume.GetSpacing()
-
-    resampler.SetOutputDirection(direction.tolist())
-    resampler.SetOutputOrigin(img_o.tolist())
-    resampler.SetOutputSpacing(spacing)
-    resampler.SetSize(volume.GetSize())
-    resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-
-    # Resample the volume on the arbitrary plane
-    transformed_volume = resampler.Execute(volume)
+    transform = sitk.Euler3DTransform()
+    transform.SetRotation(rotation[1], 0, rotation[0])
+    transform.SetTranslation((*translation, 0))
+    transform.SetCenter(origin)
+    resampled = sitk.Resample(volume, transform, sitk.sitkNearestNeighbor, 0.0, volume.GetPixelID())
     # needed to deal with rotation dependency of the volume
     return TransformedVolume(
-        transformed_volume,
+        resampled,
         transformation_action=transformation_action,
         _private=42,
     )
@@ -188,52 +163,33 @@ def create_transformed_volume(
 
 def get_volume_slice(
     volume: sitk.Image,
-    # TODO: shouldn't there be a default shape, like the native shape of the volume itself?
-    slice_shape: tuple[int, int],
     action: ManipulatorAction,
+    slice_shape: tuple[int, int] | None = None,
 ) -> sitk.Image:
     """Slice a 3D volume with arbitrary rotation and translation.
 
     :param volume: 3D volume to be sliced
-    :param slice_shape: shape of the output slice
     :param action: action to transform the volume
+    :param slice_shape: shape of the output slice
     :return: the sliced volume.
     """
-    o = np.array(volume.GetOrigin())
+    if slice_shape is None:
+        slice_shape = (volume.GetSize()[0], volume.GetSize()[2])
 
-    if isinstance(volume, TransformedVolume):
-        # TODO: why is origin not used here?
-        volume_transformation = EulerTransform(volume.transformation_action).get_transform_matrix()
-        action_transformation = EulerTransform(action).get_transform_matrix()
-        # TODO: why not use action_transformation.transform_action ?
-        inverse_transformed_action = np.dot(volume_transformation, action_transformation)
-        action_rotation = EulerTransform.get_angles_from_rotation_matrix(
-            inverse_transformed_action[:3, :3],
-        )
-        action_translation = (inverse_transformed_action[:3, 3] - volume_transformation[:3, 3])[:2]
-        action = ManipulatorAction(rotation=action_rotation, translation=(action_translation))
+    origin = np.array(volume.GetOrigin())
+    rotation = np.deg2rad(action.rotation)
+    translation = action.translation
 
-    # TODO: seems to be recomputed as action_transformation in block above - can it be computed once instead?
-    euler_transform = EulerTransform(action, o)
-    eul_tr = euler_transform.get_transform_matrix()
-
-    # Define plane's coordinate system
-    rotation = eul_tr[:3, :3]
-    translation = eul_tr[:, -1:].flatten()[:3]  # origin of the image plane
-
-    rotation = rotation.flatten()
+    transform = sitk.Euler3DTransform()
+    transform.SetRotation(rotation[1], 0, rotation[0])
+    transform.SetTranslation((*translation, 0))
+    transform.SetCenter(origin)
+    resampled = sitk.Resample(volume, transform, sitk.sitkNearestNeighbor, 0.0, volume.GetPixelID())
 
     resampler = sitk.ResampleImageFilter()
-    spacing = volume.GetSpacing()
-
-    w = slice_shape[0]
-    h = slice_shape[1]
-
-    resampler.SetOutputDirection(rotation.tolist())
-    resampler.SetOutputOrigin(translation.tolist())
-    resampler.SetOutputSpacing(spacing)
-    resampler.SetSize((w, 3, h))
+    resampler.SetReferenceImage(resampled)
+    resampler.SetSize((slice_shape[0], 2, slice_shape[1]))
     resampler.SetInterpolator(sitk.sitkNearestNeighbor)
 
     # Resample the volume on the arbitrary plane
-    return resampler.Execute(volume)
+    return resampler.Execute(resampled)[:, 0, :]

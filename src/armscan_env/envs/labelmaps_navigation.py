@@ -17,7 +17,6 @@ from armscan_env.envs.rewards import LabelmapClusteringBasedReward
 from armscan_env.envs.state_action import LabelmapStateAction, ManipulatorAction
 from armscan_env.util.visualizations import show_clusters
 from armscan_env.volumes.slicing import (
-    EulerTransform,
     create_transformed_volume,
     get_volume_slice,
 )
@@ -251,7 +250,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             slice_shape=self._slice_shape,
             action=manipulator_action,
         )
-        return sitk.GetArrayFromImage(sliced_volume)[:, 0, :].T
+        return sitk.GetArrayFromImage(sliced_volume).T
 
     def _get_initial_slice(self) -> np.ndarray:
         action_to_initial_slice = self._get_action_leading_to_initial_state()
@@ -285,7 +284,11 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         :param optimal_action: the optimal action for the volume to transform accordingly
         :return: the transformed volume and the transformed optimal action
         """
-        transformed_optimal_action = EulerTransform(volume_transformation_action).transform_action(
+        transformed_volume = create_transformed_volume(
+            volume=volume,
+            transformation_action=volume_transformation_action,
+        )
+        transformed_optimal_action = transformed_volume.transform_action(
             optimal_action,
         )
         if self.rotation_bounds:
@@ -294,10 +297,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             bounds[1] += abs(volume_transformation_action.rotation[1])
             self.rotation_bounds = tuple(bounds)  # type: ignore
         return (
-            create_transformed_volume(
-                volume=volume,
-                transformation_action=volume_transformation_action,
-            ),
+            transformed_volume,
             transformed_optimal_action,
         )
 
@@ -331,7 +331,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             ),
             labels_2d_slice=initial_slice,
             # TODO: pass the env's optimal position and labelmap or remove them from the StateAction?
-            optimal_position=None,
+            optimal_position=self._cur_optimal_action,
             optimal_labelmap=None,
         )
 

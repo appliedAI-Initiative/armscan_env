@@ -111,8 +111,8 @@ class ManipulatorAction:
     @classmethod
     def sample(
         cls,
-        rotation_range: tuple[float, float] = (20.0, 5.0),
-        translation_range: tuple[float, float] = (5.0, 5.0),
+        rotation_range: tuple[float, float] = (10.0, 0.0),
+        translation_range: tuple[float, float] = (10.0, 10.0),
     ) -> Self:
         rotation = (
             np.random.uniform(-rotation_range[0], rotation_range[0]),
@@ -132,7 +132,7 @@ class LabelmapStateAction(StateAction):
     labels_2d_slice: np.ndarray
     """Two-dimensional slice of the labelmap, i.e., an array of shape (N, M) with integer values.
     Each integer represents a different label (bone, nerve, etc.)"""
-    optimal_position: np.ndarray | None = None
+    optimal_position: np.ndarray | ManipulatorAction | None = None
     """The optimal position for the 2D slice, i.e., the position where the slice is the most informative.
     May be None if the optimal position is not known."""
     optimal_labelmap: np.ndarray | None = None

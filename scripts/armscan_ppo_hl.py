@@ -1,7 +1,6 @@
 import logging
 import os
 
-import SimpleITK as sitk
 from armscan_env.config import get_config
 from armscan_env.envs.labelmaps_navigation import LabelmapEnvTerminationCriterion
 from armscan_env.envs.observations import (
@@ -9,6 +8,7 @@ from armscan_env.envs.observations import (
 )
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
 from armscan_env.network import ActorFactoryArmscanDQN
+from armscan_env.volumes.loading import RegisteredLabelmap
 from armscan_env.wrapper import ArmscanEnvFactory
 
 from tianshou.highlevel.config import SamplingConfig
@@ -24,8 +24,8 @@ if __name__ == "__main__":
     config = get_config()
     logging.basicConfig(level=logging.INFO)
 
-    volume_1 = sitk.ReadImage(config.get_labels_path(1))
-    volume_2 = sitk.ReadImage(config.get_labels_path(2))
+    volume_1 = RegisteredLabelmap.v1.load_labelmap()
+    volume_2 = RegisteredLabelmap.v2.load_labelmap()
 
     log_name = os.path.join(
         "ppo",

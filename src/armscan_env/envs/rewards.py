@@ -13,7 +13,7 @@ log = logging.getLogger(__name__)
 # ToDo: make a cache for the function
 def anatomy_based_rwd(
     tissue_clusters: TissueClusters,
-    n_landmarks: Sequence[int] = (4, 2, 1),
+    n_landmarks: Sequence[int] = (4, 3, 1),
 ) -> float:
     """Calculate the reward based on the presence and location of anatomical landmarks.
 

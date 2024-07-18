@@ -30,12 +30,7 @@ class ManipulatorAction:
         # normalize translation to [-1, 1]: 0 -> -1, translation_bounds -> 1
         rotation = np.zeros(2)
         translation = np.zeros(2)
-        if self.translation[0] < 0 or self.translation[1] < 0:
-            log.debug(
-                "Action contains a negative translation, out of bounds.\n"
-                "Projecting the origin of the viewing plane to positive octant.",
-            )
-            self.project_to_positive()
+
         for i in range(2):
             if rotation_bounds[i] == 0.0:
                 rotation[i] = 0.0
@@ -82,31 +77,6 @@ class ManipulatorAction:
         log.debug(f"Unnormalized action: {rotation=} deg, {translation=}")
 
         return cls(rotation=tuple(rotation), translation=tuple(translation))  # type: ignore
-
-    def project_to_positive(self) -> None:
-        """Project the action to the positive octant.
-        This is needed when transforming the optimal action accordingly to the random volume transformation.
-        It might be, that for a negative translation and/or a negative z-rotation, the coordinates defining the
-        optimal action land in negative space. Since the action defines a coordinate frame which infers a plane
-        (x-z plane, y normal to the plane), assuming that this plane is still intercepting the positive octant,
-        it is possible to redefine the action in positive coordinates by projecting it into the positive octant.
-
-        It needs to be tested, that the volume transformations keep the optimal action in a reachable space.
-        Volume transformations are used for data augmentation only, so can be defined in the most convenient way.
-        """
-        tx, ty = self.translation
-        thz, thx = self.rotation
-        log.debug(f"Translation before projection: {self.translation}")
-        while tx < 0 or ty < 0:
-            if tx < 0:
-                ty = (np.tan(np.deg2rad(thz)) * (-tx)) + ty
-                tx = 0
-            if ty < 0:
-                tx = ((1 / np.tan(np.deg2rad(thz))) * (-ty)) + tx
-                ty = 0
-        translation = (tx, ty)
-        log.debug(f"Translation after projection: {translation}")
-        self.translation = translation
 
     @classmethod
     def sample(

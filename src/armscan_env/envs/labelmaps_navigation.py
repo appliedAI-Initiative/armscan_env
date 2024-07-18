@@ -1,6 +1,6 @@
 import logging
 from abc import ABC
-from copy import copy, deepcopy
+from copy import copy
 from typing import Any, ClassVar, Literal
 
 import numpy as np
@@ -16,9 +16,9 @@ from armscan_env.envs.base import (
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
 from armscan_env.envs.state_action import LabelmapStateAction, ManipulatorAction
 from armscan_env.util.visualizations import show_clusters
-from armscan_env.volumes.slicing import (
-    create_transformed_volume,
-    get_volume_slice,
+from armscan_env.volumes.volumes import (
+    ImageVolume,
+    TransformedVolume,
 )
 from celluloid import Camera
 from IPython.core.display import HTML
@@ -32,11 +32,6 @@ from gymnasium.core import ObsType as TObs
 from gymnasium.spaces import Box, Space
 
 log = logging.getLogger(__name__)
-
-VOL_NAME_TO_OPTIMAL_ACTION = {
-    "1": ManipulatorAction(rotation=(19.3, 0.0), translation=(0.0, 140.0)),
-    "2": ManipulatorAction(rotation=(5, 0), translation=(0, 112)),
-}
 
 
 class LabelmapEnvTerminationCriterion(TerminationCriterion["LabelmapEnv"], ABC):
@@ -69,7 +64,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
 
     def __init__(
         self,
-        name2volume: dict[str, sitk.Image],
+        name2volume: dict[str, ImageVolume],
         observation: Observation[LabelmapStateAction, Any],
         reward_metric: RewardMetric[LabelmapStateAction] = LabelmapClusteringBasedReward(),
         termination_criterion: TerminationCriterion | None = LabelmapEnvTerminationCriterion(),
@@ -98,7 +93,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
 
         # set at reset
         self._cur_labelmap_name: str | None = None
-        self._cur_labelmap_volume: sitk.Image | None = None
+        self._cur_labelmap_volume: ImageVolume | TransformedVolume | None = None
         self._cur_optimal_action: ManipulatorAction | None = None
 
         self.user_defined_bounds = rotation_bounds, translation_bounds
@@ -183,7 +178,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         return self._cur_labelmap_name
 
     @property
-    def cur_labelmap_volume(self) -> sitk.Image | None:
+    def cur_labelmap_volume(self) -> ImageVolume | TransformedVolume | None:
         return self._cur_labelmap_volume
 
     @property
@@ -243,12 +238,13 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         )
 
     def _get_slice_from_action(self, action: np.ndarray | ManipulatorAction) -> np.ndarray:
+        if self.cur_labelmap_volume is None:
+            raise RuntimeError("The labelmap volume must not be None, did you call reset?")
         if isinstance(action, np.ndarray):
             manipulator_action = self.get_manipulator_action_from_normalized_action(action)
         else:
             manipulator_action = action
-        sliced_volume = get_volume_slice(
-            volume=self.cur_labelmap_volume,
+        sliced_volume = self.cur_labelmap_volume.get_volume_slice(
             slice_shape=self._slice_shape,
             action=manipulator_action,
         )
@@ -273,10 +269,9 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
 
     def apply_volume_transformation(
         self,
-        volume: sitk.Image,
+        volume: ImageVolume,
         volume_transformation_action: ManipulatorAction,
-        optimal_action: ManipulatorAction,
-    ) -> (sitk.Image, ManipulatorAction):  # type: ignore
+    ) -> (TransformedVolume, ManipulatorAction):  # type: ignore
         """Apply a random transformation to the volume and to the optimal action. The transformation is a random rotation
         and translation. The bounds of the rotation are updated if they have already been set. The translation bounds are
         computed from the volume size in the 'sample_initial_state' method.
@@ -286,13 +281,11 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         :param optimal_action: the optimal action for the volume to transform accordingly
         :return: the transformed volume and the transformed optimal action
         """
-        transformed_volume = create_transformed_volume(
+        transformed_volume = TransformedVolume.create_transformed_volume(
             volume=volume,
             transformation_action=volume_transformation_action,
         )
-        transformed_optimal_action = transformed_volume.transform_action(
-            optimal_action,
-        )
+        transformed_optimal_action = transformed_volume.optimal_action
         if self.rotation_bounds:
             bounds = list(self.rotation_bounds)
             bounds[0] += abs(volume_transformation_action.rotation[0])
@@ -310,18 +303,16 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             )
         sampled_image_name = np.random.choice(list(self.name2volume.keys()))
         self._cur_labelmap_name = sampled_image_name
-        volume_optimal_action = deepcopy(VOL_NAME_TO_OPTIMAL_ACTION[sampled_image_name])
 
         if self._apply_volume_transformation:
             volume_transformation_action = ManipulatorAction.sample()
             self._cur_labelmap_volume, self._cur_optimal_action = self.apply_volume_transformation(
                 volume=self.name2volume[sampled_image_name],
                 volume_transformation_action=volume_transformation_action,
-                optimal_action=volume_optimal_action,
             )
         else:
             self._cur_labelmap_volume = self.name2volume[sampled_image_name]
-            self._cur_optimal_action = volume_optimal_action
+            self._cur_optimal_action = self._cur_labelmap_volume.optimal_action
         if None in self.translation_bounds:
             self._compute_translation_bounds()
         if self._slice_shape is None:
@@ -337,7 +328,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             optimal_labelmap=None,
         )
 
-    def compute_slice_shape(self, volume: sitk.Image | None) -> None:
+    def compute_slice_shape(self, volume: ImageVolume | None) -> None:
         """Compute the shape of the 2D slices that will be used as observations."""
         if volume is None:
             raise RuntimeError("The labelmap volume must not be None, did you call reset?")

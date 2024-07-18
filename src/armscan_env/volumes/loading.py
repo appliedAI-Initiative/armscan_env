@@ -1,13 +1,64 @@
+from enum import Enum
+
 import numpy as np
 import SimpleITK as sitk
 from armscan_env.config import get_config
+from armscan_env.envs.state_action import ManipulatorAction
+from armscan_env.volumes.volumes import ImageVolume
 
 config = get_config()
 
 
-def resize_sitk_volume(
-    volumes: list[sitk.Image],  # n_spacing: tuple[float, float, float],
-) -> list[sitk.Image]:
+class RegisteredLabelmap(Enum):
+    v1 = 1
+    v2 = 2
+    v13 = 13
+    v17 = 17
+    v18 = 18
+    v35 = 35
+    v42 = 42
+
+    def get_optimal_action(self) -> ManipulatorAction:
+        match self:
+            case RegisteredLabelmap.v1:
+                return ManipulatorAction(rotation=(19.3, 0.0), translation=(0.0, 140.0))
+            case RegisteredLabelmap.v2:
+                return ManipulatorAction(rotation=(5, 0), translation=(0, 112))
+            case RegisteredLabelmap.v13:
+                return ManipulatorAction(rotation=(5, 0), translation=(0, 165))
+            case RegisteredLabelmap.v17:
+                return ManipulatorAction(rotation=(5, 0), translation=(0, 158))
+            case RegisteredLabelmap.v18:
+                return ManipulatorAction(rotation=(0, 0), translation=(0, 105))
+            case RegisteredLabelmap.v35:
+                return ManipulatorAction(rotation=(3, 0), translation=(0, 155))
+            case RegisteredLabelmap.v42:
+                return ManipulatorAction(rotation=(-3, 0), translation=(0, 178))
+            case _:
+                raise ValueError(f"Optimal action for {self} not defined")
+
+    def get_labelmap_id(self) -> int:
+        return self.value
+
+    def get_file_path(self) -> str:
+        return config.get_single_labelmap_path(self.get_labelmap_id())
+
+    def load_labelmap(self) -> ImageVolume:
+        volume = sitk.ReadImage(self.get_file_path())
+        optimal_action = self.get_optimal_action()
+        return ImageVolume(volume, optimal_action=optimal_action)
+
+    @classmethod
+    def load_all_labelmaps(cls, normalize_spacing: bool = True) -> list[ImageVolume]:
+        volumes = [labelmap.load_labelmap() for labelmap in cls]
+        if normalize_spacing:
+            volumes = normalize_sitk_volumes_to_highest_spacing(volumes)
+        return volumes
+
+
+def normalize_sitk_volumes_to_highest_spacing(
+    volumes: list[ImageVolume],  # n_spacing: tuple[float, float, float],
+) -> list[ImageVolume]:
     """Resize a SimpleITK volume to a normalized spacing, and interpolate to get right amount of voxels.
     Have a look at [this](https://stackoverflow.com/questions/48065117/simpleitk-resize-images) link to see potential problems.
 
@@ -39,26 +90,21 @@ def resize_sitk_volume(
         resampler.SetOutputDirection(volume.GetDirection())
         resampler.SetOutputOrigin(volume.GetOrigin())
         resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-        normalized_volumes.append(resampler.Execute(volume))
+        normalized_volume = ImageVolume(
+            resampler.Execute(volume),
+            optimal_action=volume.optimal_action,
+        )
+        normalized_volumes.append(normalized_volume)
 
     return normalized_volumes
 
 
 def load_sitk_volumes(
     normalize: bool = False,
-) -> list[sitk.Image]:
+) -> list[ImageVolume]:
     """Load a SimpleITK volume from a file.
 
     :param normalize: whether to normalize the volumes to a single spacing
     :return: the loaded volume
     """
-    volumes = []
-    # count how many nii files are under the path and load them with config.get_labels_patt
-    for label in range(1, config.count_labels() + 1):
-        volume = sitk.ReadImage(config.get_labels_path(label))
-        volumes.append(volume)
-
-    if normalize:
-        volumes = resize_sitk_volume(volumes)
-
-    return volumes
+    return RegisteredLabelmap.load_all_labelmaps(normalize_spacing=normalize)

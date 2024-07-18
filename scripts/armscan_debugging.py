@@ -1,7 +1,6 @@
 import logging
 import os
 
-import SimpleITK as sitk
 from armscan_env.config import get_config
 from armscan_env.envs.labelmaps_navigation import LabelmapEnvTerminationCriterion
 from armscan_env.envs.observations import (
@@ -9,6 +8,7 @@ from armscan_env.envs.observations import (
     LabelmapClusterObservation,
 )
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
+from armscan_env.volumes.loading import RegisteredLabelmap
 from armscan_env.wrapper import ArmscanEnvFactory
 
 from tianshou.highlevel.config import SamplingConfig
@@ -25,8 +25,8 @@ if __name__ == "__main__":
     config = get_config()
     logging.basicConfig(level=logging.INFO)
 
-    volume_1 = sitk.ReadImage(config.get_labels_path(1))
-    volume_2 = sitk.ReadImage(config.get_labels_path(2))
+    volume_1 = RegisteredLabelmap.v1.load_labelmap()
+    volume_2 = RegisteredLabelmap.v2.load_labelmap()
 
     log_name = os.path.join("sac-characteristic-array", str(ExperimentConfig.seed), datetime_tag())
     experiment_config = ExperimentConfig()
@@ -53,7 +53,7 @@ if __name__ == "__main__":
         slice_shape=(volume_size[0], volume_size[2]),
         max_episode_len=20,
         rotation_bounds=(90.0, 45.0),
-        translation_bounds=(0.0, None),
+        translation_bounds=(None, None),
         render_mode="animation",
         seed=experiment_config.seed,
         venv_type=VectorEnvType.DUMMY,

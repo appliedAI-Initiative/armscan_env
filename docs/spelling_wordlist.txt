@@ -48,6 +48,7 @@ initialised
 rgb
 ansi
 voxel
+voxels
 convolutional
 preprocessed
 subspaces
@@ -60,3 +61,5 @@ plt
 mlp
 config
 env
+octant
+octants

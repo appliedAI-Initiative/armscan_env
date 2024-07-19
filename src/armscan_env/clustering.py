@@ -23,9 +23,9 @@ class TissueLabel(Enum):
             case TissueLabel.BONES:
                 return find_DBSCAN_clusters(self, labelmap_slice, eps=4.1, min_samples=46)
             case TissueLabel.TENDONS:
-                return find_DBSCAN_clusters(self, labelmap_slice, eps=4.1, min_samples=46)
+                return find_DBSCAN_clusters(self, labelmap_slice, eps=3, min_samples=18)
             case TissueLabel.ULNAR:
-                return find_DBSCAN_clusters(self, labelmap_slice, eps=2.5, min_samples=18)
+                return find_DBSCAN_clusters(self, labelmap_slice, eps=1.1, min_samples=4)
             case _:
                 raise ValueError(f"Unknown tissue label: {self}")
 
@@ -37,6 +37,8 @@ class DataCluster:
     datapoints: list[tuple[float, float]] | np.ndarray
     center: tuple[np.floating[Any], np.floating[Any]]
 
+    # ToDo: Make a custom __hash__ method for the class that deals with lists
+
 
 @dataclass(kw_only=True)
 class TissueClusters:
@@ -45,6 +47,8 @@ class TissueClusters:
     bones: list[DataCluster]
     tendons: list[DataCluster]
     ulnar: list[DataCluster]
+
+    # ToDo: Make a custom __hash__ method for the class that deals with lists
 
     def get_cluster_for_label(self, label: TissueLabel) -> list[DataCluster]:
         """Get the clusters for a given tissue label."""
@@ -142,9 +146,10 @@ def find_DBSCAN_clusters(
     label_positions = np.array(list(zip(*np.where(binary_mask), strict=True)))
     clusterer = DBSCAN(eps=eps, min_samples=min_samples)
     clusters = clusterer.fit_predict(label_positions)
-    n_clusters = (
-        len(np.unique(clusters)) - 1
-    )  # noise cluster has label -1, we don't take it into account
+    if -1 in clusters:
+        n_clusters = len(np.unique(clusters)) - 1
+    else:
+        n_clusters = len(np.unique(clusters))
     log.debug(f"Found {n_clusters} clusters")
 
     cluster_list = []

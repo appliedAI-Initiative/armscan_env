@@ -33,14 +33,14 @@ if __name__ == "__main__":
 
     sampling_config = SamplingConfig(
         num_epochs=10,
-        step_per_epoch=100000,
-        num_train_envs=-1,
+        step_per_epoch=100,
+        num_train_envs=1,
         num_test_envs=1,
-        buffer_size=100000,
+        buffer_size=100,
         batch_size=256,
         step_per_collect=200,
         update_per_step=2,
-        start_timesteps=5000,
+        start_timesteps=50,
         start_timesteps_random=True,
     )
 
@@ -53,15 +53,16 @@ if __name__ == "__main__":
         slice_shape=(volume_size[0], volume_size[2]),
         max_episode_len=20,
         rotation_bounds=(90.0, 45.0),
-        translation_bounds=(0.0, None),
+        translation_bounds=(None, None),
         render_mode="animation",
         seed=experiment_config.seed,
-        venv_type=VectorEnvType.SUBPROC_SHARED_MEM_AUTO,
-        n_stack=4,
+        venv_type=VectorEnvType.DUMMY,
+        n_stack=2,
         termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.1),
         reward_metric=LabelmapClusteringBasedReward(),
         project_actions_to="y",
         apply_volume_transformation=True,
+        add_reward_details=True,
     )
 
     experiment = (

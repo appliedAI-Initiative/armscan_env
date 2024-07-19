@@ -10,9 +10,10 @@ from armscan_env.envs.state_action import LabelmapStateAction
 log = logging.getLogger(__name__)
 
 
+# ToDo: make a cache for the function
 def anatomy_based_rwd(
     tissue_clusters: TissueClusters,
-    n_landmarks: Sequence[int] = (4, 2, 1),
+    n_landmarks: Sequence[int] = (4, 3, 1),
 ) -> float:
     """Calculate the reward based on the presence and location of anatomical landmarks.
 
@@ -92,7 +93,7 @@ class LabelmapClusteringBasedReward(RewardMetric[LabelmapStateAction]):
 
     def __init__(
         self,
-        n_landmarks: Sequence[int] = (4, 2, 1),
+        n_landmarks: Sequence[int] = (4, 3, 1),
     ):
         self.n_landmarks = n_landmarks
 

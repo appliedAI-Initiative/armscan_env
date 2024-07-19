@@ -52,5 +52,5 @@ repos:
         language: system
       - id: clean-nbs
         name: clean-nbs
-        entry: poetry run python docs/nbstripout.py
+        entry: poetry run python nbstripout.py
         language: system

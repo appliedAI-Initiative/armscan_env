@@ -1,4 +1,5 @@
 import logging
+import warnings
 from dataclasses import dataclass
 from typing import Self
 
@@ -29,6 +30,7 @@ class ManipulatorAction:
         # normalize translation to [-1, 1]: 0 -> -1, translation_bounds -> 1
         rotation = np.zeros(2)
         translation = np.zeros(2)
+
         for i in range(2):
             if rotation_bounds[i] == 0.0:
                 rotation[i] = 0.0
@@ -43,7 +45,7 @@ class ManipulatorAction:
         result = np.concatenate([rotation, translation])
 
         if not (result >= -1).all() or not (result <= 1).all():
-            raise ValueError(
+            warnings.warn(
                 f"Angles or translations are out of bounds: "
                 f"{self.rotation=}, {self.translation=},"
                 f" {rotation_bounds=}, {translation_bounds=}",
@@ -63,7 +65,7 @@ class ManipulatorAction:
         if not (action.shape == (4,)):
             raise ValueError(f"Action has wrong shape: {action.shape=}\nShould be (4,)")
         if not (action >= -1).all() or not (action <= 1).all():
-            raise ValueError(
+            warnings.warn(
                 f"Action is not normalized: {action=}\nShould be in the range [-1, 1]",
             )
         if None in translation_bounds:
@@ -76,6 +78,22 @@ class ManipulatorAction:
 
         return cls(rotation=tuple(rotation), translation=tuple(translation))  # type: ignore
 
+    @classmethod
+    def sample(
+        cls,
+        rotation_range: tuple[float, float] = (10.0, 0.0),
+        translation_range: tuple[float, float] = (10.0, 10.0),
+    ) -> Self:
+        rotation = (
+            np.random.uniform(-rotation_range[0], rotation_range[0]),
+            np.random.uniform(-rotation_range[1], rotation_range[1]),
+        )
+        translation = (
+            np.random.uniform(-translation_range[0], translation_range[0]),
+            np.random.uniform(-translation_range[1], translation_range[1]),
+        )
+        return cls(rotation=rotation, translation=translation)
+
 
 @dataclass(kw_only=True)
 class LabelmapStateAction(StateAction):
@@ -84,7 +102,7 @@ class LabelmapStateAction(StateAction):
     labels_2d_slice: np.ndarray
     """Two-dimensional slice of the labelmap, i.e., an array of shape (N, M) with integer values.
     Each integer represents a different label (bone, nerve, etc.)"""
-    optimal_position: np.ndarray | None = None
+    optimal_position: np.ndarray | ManipulatorAction | None = None
     """The optimal position for the 2D slice, i.e., the position where the slice is the most informative.
     May be None if the optimal position is not known."""
     optimal_labelmap: np.ndarray | None = None

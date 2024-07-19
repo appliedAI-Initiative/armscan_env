@@ -23,9 +23,9 @@ class TissueLabel(Enum):
             case TissueLabel.BONES:
                 return find_DBSCAN_clusters(self, labelmap_slice, eps=4.1, min_samples=46)
             case TissueLabel.TENDONS:
-                return find_DBSCAN_clusters(self, labelmap_slice, eps=2.5, min_samples=15)
+                return find_DBSCAN_clusters(self, labelmap_slice, eps=3, min_samples=18)
             case TissueLabel.ULNAR:
-                return find_DBSCAN_clusters(self, labelmap_slice, eps=2.0, min_samples=10)
+                return find_DBSCAN_clusters(self, labelmap_slice, eps=1.1, min_samples=4)
             case _:
                 raise ValueError(f"Unknown tissue label: {self}")
 

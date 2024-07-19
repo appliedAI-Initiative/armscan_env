@@ -37,7 +37,7 @@ log = logging.getLogger(__name__)
 class LabelmapEnvTerminationCriterion(TerminationCriterion["LabelmapEnv"], ABC):
     def __init__(
         self,
-        min_reward_threshold: float = -0.1,
+        min_reward_threshold: float = -0.05,
     ):
         self.min_reward_threshold = min_reward_threshold
 
@@ -281,7 +281,7 @@ class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         :param optimal_action: the optimal action for the volume to transform accordingly
         :return: the transformed volume and the transformed optimal action
         """
-        transformed_volume = TransformedVolume.create_transformed_volume(
+        transformed_volume = TransformedVolume(
             volume=volume,
             transformation_action=volume_transformation_action,
         )

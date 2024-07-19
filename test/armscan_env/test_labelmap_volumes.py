@@ -51,7 +51,7 @@ class TestLabelMaps:
 
     @staticmethod
     def test_optimal_actions(labelmaps):
-        for _i, labelmap in enumerate(labelmaps):
+        for i, labelmap in enumerate(labelmaps):
             slice_shape = (labelmap.GetSize()[0], labelmap.GetSize()[2])
             sliced_volume = labelmap.get_volume_slice(
                 slice_shape=slice_shape,
@@ -60,16 +60,22 @@ class TestLabelMaps:
             sliced_img = sitk.GetArrayFromImage(sliced_volume)
             cluster = TissueClusters.from_labelmap_slice(sliced_img.T)
             reward = anatomy_based_rwd(cluster)
-            assert reward > -0.1
+            if reward < -0.05:
+                show_clusters(cluster, sliced_img.T)
+                print(
+                    f"Volume {i + 1}, reward: {reward}",
+                )
+                plt.show()
+            assert reward > -0.05
 
     @staticmethod
     def test_rand_transformations(labelmaps):
         for i, labelmap in enumerate(labelmaps):
             slice_shape = (labelmap.GetSize()[0], labelmap.GetSize()[2])
             j = 0
-            while j < 3:
+            while j < 10:
                 volume_transformation_action = ManipulatorAction.sample()
-                transformed_labelmap = TransformedVolume.create_transformed_volume(
+                transformed_labelmap = TransformedVolume(
                     volume=labelmap,
                     transformation_action=volume_transformation_action,
                 )
@@ -80,13 +86,13 @@ class TestLabelMaps:
                 sliced_img = sitk.GetArrayFromImage(sliced_volume)
                 cluster = TissueClusters.from_labelmap_slice(sliced_img.T)
                 reward = anatomy_based_rwd(cluster)
-                if reward < -0.1:
+                if reward < -0.05:
                     show_clusters(cluster, sliced_img.T)
                     print(
-                        f"Volume {i + 1} and transformation {volume_transformation_action}, reward: {reward}",
+                        f"Volume {i + 1} and transformation {volume_transformation_action}, reward: {reward}.",
                     )
-                plt.show()
+                    plt.show()
                 j += 1
                 assert (
-                    reward > -0.1
+                    reward > -0.05
                 ), f"Reward: {reward} for volume {i + 1} and transformation {volume_transformation_action}"

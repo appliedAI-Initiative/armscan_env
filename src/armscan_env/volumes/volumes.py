@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Self
+from typing import Any
 
 import numpy as np
 import SimpleITK as sitk
@@ -114,42 +114,14 @@ class ImageVolume(sitk.Image):
 
 
 class TransformedVolume(ImageVolume):
-    """Represents a volume that has been transformed by an action.
-
-    Should only ever be instantiated by `create_transformed_volume`.
-    """
+    """Represents a volume that has been transformed by an action."""
 
     def __init__(
         self,
         volume: ImageVolume,
         transformation_action: ManipulatorAction | None,
         *args: Any,
-        _private: int,
     ):
-        if _private != 42:
-            raise ValueError(
-                "TransformedVolume should only be instantiated by create_transformed_volume.",
-            )
-        super().__init__(volume, *args)
-        if transformation_action is None:
-            transformation_action = ManipulatorAction(rotation=(0.0, 0.0), translation=(0.0, 0.0))
-        self._transformation_action = transformation_action
-        self._tr_optimal_action = self.transform_action(volume.optimal_action)
-
-    @property
-    def transformation_action(self) -> ManipulatorAction:
-        return self._transformation_action
-
-    @property
-    def optimal_action(self) -> ManipulatorAction:
-        return self._tr_optimal_action
-
-    @classmethod
-    def create_transformed_volume(
-        cls,
-        volume: ImageVolume,
-        transformation_action: ManipulatorAction,
-    ) -> Self:
         """Transform a 3D volume with arbitrary rotation and translation.
 
         :param volume: 3D volume to be transformed
@@ -161,6 +133,8 @@ class TransformedVolume(ImageVolume):
                 f"This operation should only be performed on a non-transformed volume "
                 f"but got an instance of: {volume.__class__.__name__}.",
             )
+        if transformation_action is None:
+            transformation_action = ManipulatorAction(rotation=(0.0, 0.0), translation=(0.0, 0.0))
 
         origin = np.array(volume.GetOrigin())
         rotation = np.deg2rad(transformation_action.rotation)
@@ -178,12 +152,18 @@ class TransformedVolume(ImageVolume):
             volume.GetPixelID(),
         )
         resampled = ImageVolume(resampled, optimal_action=volume.optimal_action)
-        # needed to deal with rotation dependency of the volume
-        return cls(
-            resampled,
-            transformation_action=transformation_action,
-            _private=42,
-        )
+
+        super().__init__(resampled, *args)
+        self._transformation_action = transformation_action
+        self._tr_optimal_action = self.transform_action(volume.optimal_action)
+
+    @property
+    def transformation_action(self) -> ManipulatorAction:
+        return self._transformation_action
+
+    @property
+    def optimal_action(self) -> ManipulatorAction:
+        return self._tr_optimal_action
 
     def transform_action(self, relative_action: ManipulatorAction) -> ManipulatorAction:
         """Transform an action by the inverse of the volume transformation to be relative to the new coordinate
@@ -262,11 +242,15 @@ class TransformedVolume(ImageVolume):
         It needs to be tested, that the volume transformations keep the optimal action in a reachable space.
         Volume transformations are used for data augmentation only, so can be defined in the most convenient way.
         """
-        sx, sy = self.GetSize()[0], self.GetSize()[1]
+        v_size = self.GetSize()
+        v_spacing = self.GetSpacing()
+        sx, sy = v_size[0] * v_spacing[0], v_size[1] * v_spacing[1]
         tx, ty = transformed_action.translation
         thz, thx = transformed_action.rotation
         log.debug(f"Translation before projection: {transformed_action.translation}")
+
         while tx < 0 or ty < 0 or tx > sx or ty > sy:
+            prev_tx, prev_ty = tx, ty
             if tx < 0:
                 ty = (np.tan(np.deg2rad(thz)) * (-tx)) + ty
                 tx = 0
@@ -279,6 +263,9 @@ class TransformedVolume(ImageVolume):
             if ty > sy:
                 tx = ((1 / np.tan(np.deg2rad(thz))) * (sy - ty)) + tx
                 ty = sy
+            if tx == prev_tx and ty == prev_ty:
+                raise ValueError("Loop is stuck, reiterating through the same values.")
+
         translation = (tx, ty)
         log.debug(f"Translation after projection: {translation}")
         transformed_action.translation = translation

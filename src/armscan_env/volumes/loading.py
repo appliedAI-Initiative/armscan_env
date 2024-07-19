@@ -12,6 +12,7 @@ config = get_config()
 class RegisteredLabelmap(Enum):
     v1 = 1
     v2 = 2
+    v11 = 11
     v13 = 13
     v17 = 17
     v18 = 18
@@ -24,6 +25,8 @@ class RegisteredLabelmap(Enum):
                 return ManipulatorAction(rotation=(19.3, 0.0), translation=(0.0, 140.0))
             case RegisteredLabelmap.v2:
                 return ManipulatorAction(rotation=(5, 0), translation=(0, 112))
+            case RegisteredLabelmap.v11:
+                return ManipulatorAction(rotation=(7, 0.0), translation=(0, 163))
             case RegisteredLabelmap.v13:
                 return ManipulatorAction(rotation=(5, 0), translation=(0, 165))
             case RegisteredLabelmap.v17:
@@ -100,7 +103,7 @@ def normalize_sitk_volumes_to_highest_spacing(
 
 
 def load_sitk_volumes(
-    normalize: bool = False,
+    normalize: bool = True,
 ) -> list[ImageVolume]:
     """Load a SimpleITK volume from a file.
 

@@ -30,17 +30,23 @@ class TissueLabel(Enum):
                 raise ValueError(f"Unknown tissue label: {self}")
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, frozen=True)
 class DataCluster:
     """Data class for a cluster of a tissue in a slice."""
 
     datapoints: list[tuple[float, float]] | np.ndarray
     center: tuple[np.floating[Any], np.floating[Any]]
 
-    # ToDo: Make a custom __hash__ method for the class that deals with lists
+    def __hash__(self) -> int:
+        return hash(tuple(self.datapoints) + self.center)
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, DataCluster):
+            return False
+        return np.array_equal(self.datapoints, other.datapoints) and self.center == other.center
 
 
-@dataclass(kw_only=True)
+@dataclass(kw_only=True, frozen=True)
 class TissueClusters:
     """Data class for all tissue clusters in a slice of a labelmap volume built using DBSCAN."""
 
@@ -48,7 +54,17 @@ class TissueClusters:
     tendons: list[DataCluster]
     ulnar: list[DataCluster]
 
-    # ToDo: Make a custom __hash__ method for the class that deals with lists
+    def __hash__(self) -> int:
+        return hash(tuple(self.bones) + tuple(self.tendons) + tuple(self.ulnar))
+
+    def __eq__(self, other: Any) -> bool:
+        if not isinstance(other, TissueClusters):
+            return False
+        return (
+            self.bones == other.bones
+            and self.tendons == other.tendons
+            and self.ulnar == other.ulnar
+        )
 
     def get_cluster_for_label(self, label: TissueLabel) -> list[DataCluster]:
         """Get the clusters for a given tissue label."""

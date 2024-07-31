@@ -38,7 +38,8 @@ class DataCluster:
     center: tuple[np.floating[Any], np.floating[Any]]
 
     def __hash__(self) -> int:
-        return hash(tuple(self.datapoints) + self.center)
+        flat_datapoints = np.array(self.datapoints).flatten()
+        return hash(tuple(flat_datapoints) + self.center)
 
     def __eq__(self, other: Any) -> bool:
         if not isinstance(other, DataCluster):
@@ -173,6 +174,8 @@ def find_DBSCAN_clusters(
         label_to_pos_array = label_positions[clusters == cluster]  # get positions of each cluster
         cluster_centers = np.mean(label_to_pos_array, axis=0)  # mean of each column
 
-        cluster_list.append(DataCluster(datapoints=label_to_pos_array, center=cluster_centers))
+        cluster_list.append(
+            DataCluster(datapoints=label_to_pos_array, center=tuple(cluster_centers)),
+        )
 
     return cluster_list

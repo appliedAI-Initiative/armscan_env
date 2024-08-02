@@ -7,7 +7,7 @@ from armscan_env.envs.observations import (
     ActionRewardObservation,
 )
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
-from armscan_env.volumes.loading import RegisteredLabelmap
+from armscan_env.volumes.loading import load_sitk_volumes
 from armscan_env.wrapper import ArmscanEnvFactory
 
 from tianshou.highlevel.config import SamplingConfig
@@ -24,36 +24,35 @@ if __name__ == "__main__":
     config = get_config()
     logging.basicConfig(level=logging.INFO)
 
-    volume_1 = RegisteredLabelmap.v1.load_labelmap()
-    volume_2 = RegisteredLabelmap.v2.load_labelmap()
+    volumes = load_sitk_volumes()
 
     log_name = os.path.join("sac", str(ExperimentConfig.seed), datetime_tag())
     experiment_config = ExperimentConfig()
 
     sampling_config = SamplingConfig(
-        num_epochs=1,
-        step_per_epoch=1000000,
+        num_epochs=10,
+        step_per_epoch=100000,
         num_train_envs=40,
         num_test_envs=1,
         buffer_size=1000000,
         batch_size=256,
         step_per_collect=200,
-        update_per_step=10,
+        update_per_step=2,
         start_timesteps=5000,
         start_timesteps_random=True,
     )
 
-    volume_size = volume_1.GetSize()
+    volume_size = volumes[0].GetSize()
     env_factory = ArmscanEnvFactory(
-        name2volume={"1": volume_1, "2": volume_2},
+        name2volume={"1": volumes[0], "2": volumes[1]},
         observation=ActionRewardObservation(action_shape=(1,)).to_array_observation(),
         slice_shape=(volume_size[0], volume_size[2]),
-        max_episode_len=10,
+        max_episode_len=50,
         rotation_bounds=(90.0, 45.0),
         translation_bounds=(0.0, None),
         seed=experiment_config.seed,
         venv_type=VectorEnvType.SUBPROC_SHARED_MEM_AUTO,
-        n_stack=3,
+        n_stack=4,
         termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.1),
         reward_metric=LabelmapClusteringBasedReward(),
         project_actions_to="y",
@@ -72,6 +71,12 @@ if __name__ == "__main__":
                 critic2_lr=1e-3,
             ),
         )
+        .with_actor_factory_default(
+            (256, 256),
+            continuous_unbounded=True,
+            continuous_conditioned_sigma=True,
+        )
+        .with_common_critic_factory_default((256, 256))
         .build()
     )
 

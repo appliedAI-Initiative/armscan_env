@@ -1,10 +1,11 @@
 # Borrow a lot from openai baselines:
 # https://github.com/openai/baselines/blob/master/baselines/common/atari_wrappers.py
+import heapq
 import logging
 from abc import ABC, abstractmethod
 from collections import deque
 from copy import deepcopy
-from typing import Any, Final, Literal, SupportsFloat, TypeVar, cast
+from typing import Any, Final, Generic, Literal, SupportsFloat, TypeVar, cast
 
 import numpy as np
 import SimpleITK as sitk
@@ -236,6 +237,64 @@ class AddObservationsWrapper(Wrapper, ABC):
         return full_obs
 
 
+class ObsRewardHeapItem(Generic[ObsType]):
+    def __init__(self, obs: ObsType, reward: float):
+        self.obs = obs
+        self.reward = reward
+
+    def __le__(self, other: "ObsRewardHeapItem") -> bool:
+        return self.reward <= other.reward
+
+    def __lt__(self, other: "ObsRewardHeapItem") -> bool:
+        return self.reward < other.reward
+
+    def __ge__(self, other: "ObsRewardHeapItem") -> bool:
+        return self.reward >= other.reward
+
+    def __gt__(self, other: "ObsRewardHeapItem") -> bool:
+        return self.reward > other.reward
+
+    def to_tuple(self) -> tuple[float, ObsType]:
+        return self.reward, self.obs
+
+    def get_obs(self) -> ObsType:
+        return self.obs
+
+
+class ObsHeap(Generic[ObsType]):
+    def __init__(
+        self,
+        max_size: int,
+        padding_value: float | None = None,
+        padding_item: ObsType | None = None,
+    ):
+        self.max_size = max_size
+        self.heap: list[ObsRewardHeapItem[ObsType]] = []
+        self.padding_value = padding_value
+        self.padding_item = padding_item
+
+    def push(self, value: float, item: ObsType) -> None:
+        if len(self.heap) == 0:
+            # Initialize padding with the first inserted value and item
+            self.padding_value = value if self.padding_value is None else self.padding_value
+            self.padding_item = item if self.padding_item is None else self.padding_item
+            self.heap.extend(
+                [ObsRewardHeapItem(self.padding_item, self.padding_value)] * self.max_size,
+            )
+            heapq.heapify(self.heap)
+
+        if len(self.heap) < self.max_size:
+            heapq.heappush(self.heap, ObsRewardHeapItem(item, value))
+        else:
+            heapq.heappushpop(self.heap, ObsRewardHeapItem(item, value))
+
+    def get_n_best(self, n: int = 1) -> list[ObsType]:
+        return [item.get_obs() for item in heapq.nlargest(n, self.heap)]
+
+    def get_all(self) -> list[ObsType]:
+        return [item.get_obs() for item in self.heap]
+
+
 class AddRewardDetailsWrapper(AddObservationsWrapper):
     @property
     def additional_obs_space(self) -> gym.spaces:
@@ -244,7 +303,7 @@ class AddRewardDetailsWrapper(AddObservationsWrapper):
     def __init__(
         self,
         env: LabelmapEnv,
-        num_steps_to_observe: int | None = None,
+        n_best: int,
     ):
         """Adds the action that would lead to the highest image variance to the observation.
         In focus-stigmation agents, this helps in the initial exploratory phase of episodes, as it
@@ -252,24 +311,23 @@ class AddRewardDetailsWrapper(AddObservationsWrapper):
         best image found so far.
 
         :param env:
-        :param num_steps_to_observe: Number of steps to observe to pick the highest reward state.
-            If None, all steps are observed.
+        :param n_best: Number of best states to keep track of.
         """
         self.additional_obs = ActionRewardObservation(env.action_space.shape).to_array_observation()
-        self._additional_obs_space = self.additional_obs.observation_space
+        if n_best > 1:
+            self._additional_obs_space = ConcatenatedArrayObservation.concatenate_boxes(
+                [self.additional_obs.observation_space] * n_best,
+            )
+        else:
+            self._additional_obs_space = self.additional_obs.observation_space
         # don't move above, see comment in AddObservationsWrapper
         super().__init__(env)
-        self.num_steps_to_observe = num_steps_to_observe
-
+        self.n_best = n_best
+        self.stacked_obs = create_empty_array(self.additional_obs.observation_space, n=self.n_best)
         self.reset_wrapper()
 
     def reset_wrapper(self) -> None:
-        if self.num_steps_to_observe is None:
-            self.rewards: list[float] = []
-            self.states: list[LabelmapStateAction] = []
-        else:
-            self.rewards = deque(maxlen=self.num_steps_to_observe)  # type: ignore
-            self.states = deque(maxlen=self.num_steps_to_observe)  # type: ignore
+        self.rewards_observations_heap: ObsHeap = ObsHeap(self.n_best)
 
     def reset(self, **kwargs: Any) -> tuple[ObsType, dict[str, Any]]:
         self.reset_wrapper()
@@ -285,19 +343,25 @@ class AddRewardDetailsWrapper(AddObservationsWrapper):
         updated_obs = cast(ObsType, self.observation(obs))
         return updated_obs, reward, terminated, truncated, info
 
-    def _update_observation_fields(self) -> None:
+    def get_additional_obs_array(self) -> np.ndarray:
         tissue_clusters = TissueClusters.from_labelmap_slice(
             self.env.cur_state_action.labels_2d_slice,
         )
         clustering_reward = anatomy_based_rwd(tissue_clusters=tissue_clusters)
-        self.rewards.append(clustering_reward)
-        self.states.append(self.env.cur_state_action)
-        self.highest_rew_state_arr = self.states[np.argmax(self.rewards)]
+        if (
+            len(self.rewards_observations_heap.heap) == 0
+            or clustering_reward > self.rewards_observations_heap.heap[0].reward
+        ):
+            obs = self.additional_obs.compute_observation(self.env.cur_state_action)
+            self.rewards_observations_heap.push(clustering_reward, obs)
 
-    def get_additional_obs_array(self) -> np.ndarray:
-        # base_obs is not used, instead we directly access the current image from the env
-        self._update_observation_fields()
-        return self.additional_obs.compute_observation(self.highest_rew_state_arr)
+        return deepcopy(
+            concatenate(
+                self.additional_obs.observation_space,
+                self.rewards_observations_heap.get_n_best(self.n_best),
+                self.stacked_obs,
+            ),
+        ).flatten()
 
 
 class ArmscanEnvFactory(EnvFactory):
@@ -320,7 +384,7 @@ class ArmscanEnvFactory(EnvFactory):
         n_stack: int = 1,
         project_actions_to: Literal["x", "y", "xy", "zy"] | None = None,
         apply_volume_transformation: bool = False,
-        add_reward_details: bool = False,
+        add_reward_details: int = 0,
         **make_kwargs: Any,
     ) -> None:
         """:param name2volume: the gymnasium task/environment identifier
@@ -339,7 +403,7 @@ class ArmscanEnvFactory(EnvFactory):
         :param n_stack: the number of observations to stack in a single observation
         :param project_actions_to: constrains the action space to only x translation
         :param apply_volume_transformation: whether to apply transformations to the volume for data augmentation
-        :param add_reward_details: whether to add reward details to the observation
+        :param add_reward_details: the number of best states to keep track of
         :param make_kwargs: additional keyword arguments to pass to the environment creation function
         """
         super().__init__(venv_type)
@@ -393,8 +457,9 @@ class ArmscanEnvFactory(EnvFactory):
         if self.n_stack > 1:
             env = PatchedFrameStackObservation(env, self.n_stack)
         env = PatchedFlattenObservation(env)
-        if self.add_reward_details:
+        if self.add_reward_details > 0:
             env = AddRewardDetailsWrapper(
                 env,
+                self.add_reward_details,
             )
         return env

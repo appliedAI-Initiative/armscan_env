@@ -28,7 +28,11 @@ if __name__ == "__main__":
     volume_1 = RegisteredLabelmap.v1.load_labelmap()
     volume_2 = RegisteredLabelmap.v2.load_labelmap()
 
-    log_name = os.path.join("sac-characteristic-array", str(ExperimentConfig.seed), datetime_tag())
+    log_name = os.path.join(
+        "debug-sac-characteristic-array",
+        str(ExperimentConfig.seed),
+        datetime_tag(),
+    )
     experiment_config = ExperimentConfig()
 
     sampling_config = SamplingConfig(
@@ -57,12 +61,12 @@ if __name__ == "__main__":
         render_mode="animation",
         seed=experiment_config.seed,
         venv_type=VectorEnvType.DUMMY,
-        n_stack=2,
-        termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.1),
+        n_stack=8,
+        termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.05),
         reward_metric=LabelmapClusteringBasedReward(),
         project_actions_to="y",
         apply_volume_transformation=True,
-        add_reward_details=True,
+        add_reward_details=4,
     )
 
     experiment = (

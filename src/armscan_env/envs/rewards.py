@@ -1,6 +1,7 @@
 # my custom loss function for image navigation
 import logging
 from collections.abc import Sequence
+from functools import lru_cache
 
 import numpy as np
 from armscan_env.clustering import TissueClusters
@@ -10,15 +11,16 @@ from armscan_env.envs.state_action import LabelmapStateAction
 log = logging.getLogger(__name__)
 
 
-# ToDo: make a cache for the function
+@lru_cache(maxsize=100)
 def anatomy_based_rwd(
     tissue_clusters: TissueClusters,
-    n_landmarks: Sequence[int] = (4, 3, 1),
+    n_landmarks: tuple[int, int, int] = (4, 3, 1),
 ) -> float:
     """Calculate the reward based on the presence and location of anatomical landmarks.
 
     :param tissue_clusters: dictionary of tissues and their clusters
-    :param n_landmarks: number of landmarks for each tissue
+    :param n_landmarks: number of landmarks for each tissue,
+        in the same order as TissueLabel
     :return: reward value.
     """
     bones_loss = abs(len(tissue_clusters.bones) - n_landmarks[0])

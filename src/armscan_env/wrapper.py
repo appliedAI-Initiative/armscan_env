@@ -4,6 +4,7 @@ import heapq
 import logging
 from abc import ABC, abstractmethod
 from collections import deque
+from collections.abc import Sequence
 from copy import deepcopy
 from typing import Any, Final, Generic, Literal, SupportsFloat, TypeVar, cast
 
@@ -84,6 +85,7 @@ class PatchedFrameStackObservation(PatchedWrapper):
         stack_size: int,
         *,
         padding_type: str | ObsType = "reset",
+        excluded_observation_keys: Sequence[str] = (),
     ):
         """Had to copy-paste and adjust.
 
@@ -98,6 +100,13 @@ class PatchedFrameStackObservation(PatchedWrapper):
             3. __getattr__ is overridden to pass the attribute to the wrapped environment (like in pre-1.0 wrappers)
             4. No inheritance from RecordConstructorArgs
             5. Observation space is converted to MultiBoxSpace if it is a DictSpace
+            6. Excluded observation keys are supported for Dict observation spaces
+
+        :param env: the environment to wrap
+        :param stack_size: the number of observations to stack
+        :param padding_type: the type of padding to use
+        :param excluded_observation_keys: the keys of the observations to exclude from stacking. The observations
+            with these keys will be passed through without stacking. Can only be used with Dict observation spaces.
         """
         super().__init__(env)
 
@@ -124,7 +133,25 @@ class PatchedFrameStackObservation(PatchedWrapper):
                     f"Unexpected `padding_type`, expected 'reset', 'zero' or a custom observation space, actual value: {padding_type!r} not an instance of env observation ({env.observation_space})",
                 )
 
-        self.observation_space = batch_space(env.observation_space, n=stack_size)
+        self.excluded_observation_keys = excluded_observation_keys
+        observation_space = batch_space(env.observation_space, n=stack_size)
+
+        if len(self.excluded_observation_keys) > 0 and not isinstance(observation_space, DictSpace):
+            raise ValueError(
+                f"Excluded observation keys are only supported for Dict observation spaces, "
+                f"actual observation space: {observation_space}",
+            )
+
+        # replace excluded observation keys from observation space with the original observation spaces
+        for key in self.excluded_observation_keys:
+            if key in observation_space.spaces:
+                observation_space[key] = env.observation_space[key]
+            else:
+                log.warning(
+                    f"Excluded observation key {key} not found in observation space. "
+                    f"Available keys: {observation_space.keys()}",
+                )
+
         self.stack_size: Final[int] = stack_size
         self.padding_type: Final[str] = padding_type
 
@@ -134,8 +161,18 @@ class PatchedFrameStackObservation(PatchedWrapper):
         )
         self.stacked_obs = create_empty_array(env.observation_space, n=self.stack_size)
 
-        if isinstance(self.observation_space, DictSpace):
-            self.observation_space = MultiBoxSpace(self.observation_space)
+        if isinstance(observation_space, DictSpace):
+            observation_space = MultiBoxSpace(observation_space)
+
+        self.observation_space = observation_space
+
+    def _get_obs_from_queue(self) -> ObsType:
+        updated_obs = concatenate(self.env.observation_space, self.obs_queue, self.stacked_obs)
+        for key in self.excluded_observation_keys:
+            # replace the stacked observation with the original observation for the excluded keys
+            if key in updated_obs:
+                updated_obs[key] = self.obs_queue[-1][key]
+        return updated_obs
 
     def step(
         self,
@@ -144,10 +181,8 @@ class PatchedFrameStackObservation(PatchedWrapper):
         obs, reward, terminated, truncated, info = self.env.step(action)
         self.obs_queue.append(obs)
 
-        updated_obs = deepcopy(
-            concatenate(self.env.observation_space, self.obs_queue, self.stacked_obs),
-        )
-        return updated_obs, reward, terminated, truncated, info
+        stacked_obs = self._get_obs_from_queue()
+        return stacked_obs, reward, terminated, truncated, info
 
     def reset(self, **kwargs: Any) -> tuple[ObsType, dict[str, Any]]:
         obs, info = self.env.reset(**kwargs)
@@ -158,10 +193,9 @@ class PatchedFrameStackObservation(PatchedWrapper):
             self.obs_queue.append(self.padding_value)
         self.obs_queue.append(obs)
 
-        updated_obs = deepcopy(
-            concatenate(self.env.observation_space, self.obs_queue, self.stacked_obs),
-        )
-        return updated_obs, info
+        stacked_obs = self._get_obs_from_queue()
+
+        return stacked_obs, info
 
 
 class PatchedFlattenObservation(PatchedWrapper):
@@ -385,6 +419,7 @@ class ArmscanEnvFactory(EnvFactory):
         project_actions_to: Literal["x", "y", "xy", "zy"] | None = None,
         apply_volume_transformation: bool = False,
         add_reward_details: int = 0,
+        exclude_keys_from_framestack: Sequence[str] = (),
         **make_kwargs: Any,
     ) -> None:
         """:param name2volume: the gymnasium task/environment identifier
@@ -404,6 +439,7 @@ class ArmscanEnvFactory(EnvFactory):
         :param project_actions_to: constrains the action space to only x translation
         :param apply_volume_transformation: whether to apply transformations to the volume for data augmentation
         :param add_reward_details: the number of best states to keep track of
+        :param exclude_keys_from_framestack: the keys of the observations to exclude from stacking
         :param make_kwargs: additional keyword arguments to pass to the environment creation function
         """
         super().__init__(venv_type)
@@ -425,6 +461,7 @@ class ArmscanEnvFactory(EnvFactory):
         self.project_actions_to = project_actions_to
         self.apply_volume_transformation = apply_volume_transformation
         self.add_reward_details = add_reward_details
+        self.exclude_keys_from_framestack = exclude_keys_from_framestack
         self.make_kwargs = make_kwargs
 
     def _create_kwargs(self) -> dict:
@@ -455,7 +492,11 @@ class ArmscanEnvFactory(EnvFactory):
         )
 
         if self.n_stack > 1:
-            env = PatchedFrameStackObservation(env, self.n_stack)
+            env = PatchedFrameStackObservation(
+                env,
+                self.n_stack,
+                excluded_observation_keys=self.exclude_keys_from_framestack,
+            )
         env = PatchedFlattenObservation(env)
         if self.add_reward_details > 0:
             env = AddRewardDetailsWrapper(

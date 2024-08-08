@@ -207,10 +207,26 @@ class AddObservationsWrapper(Wrapper, ABC):
             self.observation_space = ConcatenatedArrayObservation.concatenate_boxes(
                 [self.env.observation_space, self.additional_obs_space],
             )
+        elif isinstance(self.env.observation_space, MultiBoxSpace) and isinstance(
+            self.additional_obs_space,
+            MultiBoxSpace,
+        ):
+            merged_obs_dict: dict[str, gym.spaces.Box] = {}
+            for obs in [self.env.observation_space, self.additional_obs_space]:
+                duplicate_keys = merged_obs_dict.keys() & obs.spaces.keys()
+                if duplicate_keys:
+                    for key, value in obs.spaces.items():
+                        merged_obs_dict["add_" + key if key in duplicate_keys else key] = value
+                else:
+                    merged_obs_dict.update(obs.spaces)
+
+            self.observation_space = MultiBoxSpace(merged_obs_dict)
         else:
             raise ValueError(
                 f"Observation spaces are not of type Box: {type(self.env.observation_space)}, {type(self.additional_obs_space)}",
             )
+
+        self.add_obs = create_empty_array(self.observation_space)
 
     @property
     @abstractmethod
@@ -228,13 +244,22 @@ class AddObservationsWrapper(Wrapper, ABC):
         observation: np.ndarray,
     ) -> np.ndarray:
         additional_obs = self.get_additional_obs_array()
-        try:
-            full_obs = np.concatenate([observation, additional_obs])
-        except ValueError:
+        updated_obs = deepcopy(self.add_obs)
+        if isinstance(self.observation_space, Box) and isinstance(
+            self.additional_obs_space,
+            Box,
+        ):
+            updated_obs = np.concatenate([observation, additional_obs])
+        elif isinstance(self.observation_space, MultiBoxSpace) and isinstance(
+            self.additional_obs_space, MultiBoxSpace,
+        ):
+            for obs in [observation, additional_obs]:
+                updated_obs.update(obs)
+        else:
             raise ValueError(
                 f"Observation spaces are not of type Box: {type(observation)}, {type(additional_obs)}",
             ) from None
-        return full_obs
+        return updated_obs
 
 
 class ObsRewardHeapItem(Generic[ObsType]):
@@ -313,17 +338,21 @@ class AddRewardDetailsWrapper(AddObservationsWrapper):
         :param env:
         :param n_best: Number of best states to keep track of.
         """
-        self.additional_obs = ActionRewardObservation(env.action_space.shape).to_array_observation()
+        self.additional_obs = ActionRewardObservation(env.action_space.shape)
+        _additional_obs_space = MultiBoxSpace(
+            {
+                "add_" + key: value
+                for key, value in self.additional_obs.observation_space.spaces.items()
+            },
+        )
         if n_best > 1:
-            self._additional_obs_space = ConcatenatedArrayObservation.concatenate_boxes(
-                [self.additional_obs.observation_space] * n_best,
-            )
+            self._additional_obs_space = MultiBoxSpace(batch_space(_additional_obs_space, n=n_best))
         else:
-            self._additional_obs_space = self.additional_obs.observation_space
+            self._additional_obs_space = _additional_obs_space
         # don't move above, see comment in AddObservationsWrapper
         super().__init__(env)
         self.n_best = n_best
-        self.stacked_obs = create_empty_array(self.additional_obs.observation_space, n=self.n_best)
+        self.stacked_obs = create_empty_array(_additional_obs_space, n=self.n_best)
         self.reset_wrapper()
 
     def reset_wrapper(self) -> None:
@@ -355,13 +384,18 @@ class AddRewardDetailsWrapper(AddObservationsWrapper):
             obs = self.additional_obs.compute_observation(self.env.cur_state_action)
             self.rewards_observations_heap.push(clustering_reward, obs)
 
+        additional_obs = self.rewards_observations_heap.get_n_best(self.n_best)
+        additional_obs = [
+            {"add_" + key: value for key, value in obs.items()} for obs in additional_obs
+        ]
+
         return deepcopy(
             concatenate(
-                self.additional_obs.observation_space,
-                self.rewards_observations_heap.get_n_best(self.n_best),
+                self.additional_obs_space,
+                additional_obs,
                 self.stacked_obs,
             ),
-        ).flatten()
+        )
 
 
 class ArmscanEnvFactory(EnvFactory):
@@ -456,7 +490,7 @@ class ArmscanEnvFactory(EnvFactory):
 
         if self.n_stack > 1:
             env = PatchedFrameStackObservation(env, self.n_stack)
-        env = PatchedFlattenObservation(env)
+        # env = PatchedFlattenObservation(env)
         if self.add_reward_details > 0:
             env = AddRewardDetailsWrapper(
                 env,

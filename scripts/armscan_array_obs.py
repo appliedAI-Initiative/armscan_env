@@ -58,7 +58,7 @@ if __name__ == "__main__":
             "7": volumes[6],
             "8": volumes[7],
         },
-        observation=ActionRewardObservation(action_shape=(1,)).to_array_observation(),
+        observation=ActionRewardObservation(action_shape=(2,)),
         slice_shape=(volume_size[0], volume_size[2]),
         max_episode_len=50,
         rotation_bounds=(90.0, 45.0),
@@ -68,7 +68,7 @@ if __name__ == "__main__":
         n_stack=8,
         termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.05),
         reward_metric=LabelmapClusteringBasedReward(),
-        project_actions_to="y",
+        project_actions_to="zy",
         apply_volume_transformation=True,
         add_reward_details=4,
     )

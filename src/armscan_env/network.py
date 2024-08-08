@@ -25,6 +25,18 @@ class LabelmapsObsBatchProtocol(BatchProtocol):
     reward: np.ndarray
 
 
+class AddBestActionDimBatchProtocol(BatchProtocol):
+    """Batch protocol for the observation of the LabelmapSliceAsChannelsObservation class.
+    Must have the same fields as the TDict of ChanneledLabelmapsObsWithActReward.
+    """
+
+    channeled_slice: np.ndarray
+    action: np.ndarray
+    reward: np.ndarray
+    add_action: np.ndarray
+    add_reward: np.ndarray
+
+
 def layer_init(layer: nn.Module, std: float = np.sqrt(2), bias_const: float = 0.0) -> nn.Module:
     """Initialize a layer with the given standard deviation and bias constant."""
     torch.nn.init.orthogonal_(layer.weight, std)
@@ -64,6 +76,7 @@ class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
         w: int,
         action_dim: int,
         n_stack: int,
+        add_best_action_dim: int,
         device: str | int | torch.device = "cpu",
         mlp_output_dim: int = 512,
         layer_init: Callable[[nn.Module], nn.Module] = layer_init,
@@ -71,8 +84,9 @@ class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
         super().__init__()
         self.device = device
         self.n_stack = n_stack
+        self.add_best_action_dim = add_best_action_dim
         self.stacked_slice_shape = (n_stack * c, h, w)
-        self.stacked_act_rew_shape = (n_stack * (action_dim + 1),)
+        self.stacked_act_rew_shape = ((n_stack + add_best_action_dim) * (action_dim + 1),)
 
         self.channeled_slice_cnn_CHW = nn.Sequential(
             layer_init(nn.Conv2d(n_stack * c, 32, kernel_size=8, stride=4)),
@@ -84,7 +98,7 @@ class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
             nn.Flatten(),
         )
 
-        mlp_input_dim = n_stack * (action_dim + 1)  # action concatenated with reward
+        mlp_input_dim = (n_stack + add_best_action_dim) * (action_dim + 1)  # actions and rewards
         self.action_reward_mlp = nn.Sequential(
             nn.Linear(mlp_input_dim, 512),
             nn.ReLU(inplace=True),
@@ -110,7 +124,7 @@ class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
 
     def forward(
         self,
-        obs: LabelmapsObsBatchProtocol,
+        obs: LabelmapsObsBatchProtocol | AddBestActionDimBatchProtocol,
         state: Any | None = None,
     ) -> tuple[torch.Tensor, Any]:
         r"""Mapping: s -> Q(s, \*).
@@ -128,13 +142,24 @@ class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
         ).reshape(-1, *self.stacked_slice_shape)
         image_output = self.channeled_slice_cnn_CHW(channeled_slice)
 
-        action_reward = torch.concat(
-            [
-                torch.as_tensor(obs.action, device=self.device),
-                torch.as_tensor(obs.reward, device=self.device),
-            ],
-            dim=-1,
-        ).reshape(-1, *self.stacked_act_rew_shape)
+        if self.add_best_action_dim:
+            action_reward = torch.concat(
+                [
+                    torch.as_tensor(obs.action, device=self.device),
+                    torch.as_tensor(obs.reward, device=self.device),
+                    torch.as_tensor(obs.add_action, device=self.device),
+                    torch.as_tensor(obs.add_reward, device=self.device),
+                ],
+                dim=-1,
+            ).reshape(-1, *self.stacked_act_rew_shape)
+        else:
+            action_reward = torch.concat(
+                [
+                    torch.as_tensor(obs.action, device=self.device),
+                    torch.as_tensor(obs.reward, device=self.device),
+                ],
+                dim=-1,
+            ).reshape(-1, *self.stacked_act_rew_shape)
         action_reward_output = self.action_reward_mlp(action_reward)
 
         concat = torch.cat([image_output, action_reward_output], dim=1)
@@ -155,18 +180,45 @@ class ActorFactoryArmscanDQN(ActorFactory):
         # which then delivers this kind of tuple of tuples
         # Will fail with any other envs object but we can't currently express this in typing
         # TODO: improve tianshou typing to solve this in env.TObservationShape
-        try:
+        n_stack = 1
+        add_best_action_dim = 0
+        # I know this is terrible but right now I dont have time to engineer it properly
+        try:  # base scenario: no stack, no best actions
             (c, h, w), (action_dim,), _ = envs.get_observation_shape()  # type: ignore
-            n_stack = 1
         except BaseException:
-            (
-                (n_stack, c, h, w),
+            try:  # stack, no best actions
                 (
+                    (n_stack, c, h, w),
+                    (
+                        _,
+                        action_dim,
+                    ),
                     _,
-                    action_dim,
-                ),
-                _,
-            ) = envs.get_observation_shape()  # type: ignore
+                ) = envs.get_observation_shape()  # type: ignore
+            except BaseException:
+                try:  # stack, 1 best action
+                    (
+                        (n_stack, c, h, w),
+                        (
+                            _,
+                            action_dim,
+                        ),
+                        _,
+                        (_,),
+                        (_,),
+                    ) = envs.get_observation_shape()  # type: ignore
+                    add_best_action_dim = 1
+                except BaseException:  # stack, n best actions
+                    (
+                        (n_stack, c, h, w),
+                        (
+                            _,
+                            action_dim,
+                        ),
+                        _,
+                        (add_best_action_dim, _),
+                        _,
+                    ) = envs.get_observation_shape()  # type: ignore
 
         net: DQN_MLP_Concat = DQN_MLP_Concat(
             c=c,
@@ -174,6 +226,7 @@ class ActorFactoryArmscanDQN(ActorFactory):
             w=w,
             action_dim=action_dim,
             n_stack=n_stack,
+            add_best_action_dim=add_best_action_dim,
             device=device,
         )
         return ActorProb(net, envs.get_action_shape(), device=device).to(device)

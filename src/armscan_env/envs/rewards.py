@@ -89,9 +89,7 @@ def anatomy_based_rwd(
 
 
 class LabelmapClusteringBasedReward(RewardMetric[LabelmapStateAction]):
-    """Reward metric based on the presence and location of anatomical landmarks.
-    The reward is calculated as the negative of the loss function calculated by anatomy_based_rwd.
-    """
+    """Reward metric based on the presence and location of anatomical landmarks."""
 
     def __init__(
         self,
@@ -100,6 +98,9 @@ class LabelmapClusteringBasedReward(RewardMetric[LabelmapStateAction]):
         self.n_landmarks = n_landmarks
 
     def compute_reward(self, state: LabelmapStateAction) -> float:
+        """Calculate the reward based on the presence and location of anatomical landmarks.
+        First the tissue clusters are found using DBSCAN, then the reward is calculated by `anatomy_based_rwd`.
+        """
         clusters = TissueClusters.from_labelmap_slice(state.labels_2d_slice)
         return anatomy_based_rwd(tissue_clusters=clusters, n_landmarks=self.n_landmarks)
 

@@ -9,9 +9,11 @@ def _show(
     slices: list,
     start: int,
     lap: int,
-    col: int = 5,
-    cmap: str | None = None,
-    aspect: int = 6,
+    col: int,
+    extent: tuple[int, int, int, int] | None,
+    cmap: str | None,
+    aspect: float | str,
+    axis: bool,
 ) -> AxesImage | Axes:
     """Function to display row of image slices.
 
@@ -19,17 +21,22 @@ def _show(
     :param start: starting slice number
     :param lap: number of slices to skip
     :param col: number of columns to display
+    :param extent: extent of the image
     :param cmap: color map to use
     :param aspect: aspect ratio of each image
     :return: None.
     """
+    if extent is None:
+        extent = [0, slices[0].shape[1], 0, slices[0].shape[0]]
+
     rows = -(-len(slices) // col)
     fig, ax = plt.subplots(rows, col, figsize=(15, 2 * rows))
     # Flatten the ax array to simplify indexing
     ax = ax.flatten()
     for i, slice in enumerate(slices):
-        ax[i].imshow(slice, cmap=cmap, origin="lower", aspect=aspect)
+        ax[i].imshow(slice, cmap=cmap, origin="lower", aspect=aspect, extent=extent)
         ax[i].set_title(f"Slice {start - i * lap}")  # Set titles if desired
+        ax[i].axis("off") if not axis else None  # Turn off axis if desired
     # Adjust layout to prevent overlap of titles
     plt.tight_layout()
     return ax
@@ -41,8 +48,10 @@ def show_slices(
     end: int,
     lap: int,
     col: int = 5,
+    extent: tuple[int, int, int, int] | None = None,
     cmap: str | None = None,
-    aspect: int = 6,
+    aspect: float | str = "auto",
+    axis: bool = False,
 ) -> AxesImage | Axes:
     """Function to display row of image slices.
 
@@ -51,6 +60,7 @@ def show_slices(
     :param end: ending slice number
     :param lap: number of slices to skip
     :param col: number of columns to display
+    :param extent: extent of the image, can be set to change the reference frame
     :param cmap: color map to use
     :param aspect: aspect ratio of each image
     :return: None.
@@ -62,80 +72,42 @@ def show_slices(
         slices.append(data[:, slice, :])
         if it == end:
             break
-    return _show(slices, start, lap, col, cmap, aspect)
-
-
-def show_cluster_centers(
-    tissue_clusters: TissueClusters,
-    slice: np.ndarray,
-    ax: Axes | None = None,
-) -> AxesImage | Axes:
-    """Plot the centers of the clusters of all tissues in a slice.
-
-    :param tissue_clusters: dictionary of tissues and their clusters
-    :param slice: image slice to cluster
-    :param ax: axis to plot on
-    :return: None.
-    """
-    ax = ax or plt.gca()
-
-    for tissue_label in TissueLabel:
-        for data in tissue_clusters.get_cluster_for_label(tissue_label):
-            # plot clusters with different colors
-            ax.scatter(data.center[0], data.center[1], color="red", marker="*", s=20)
-
-        ax.imshow(slice, aspect=6, origin="lower")
-    return ax
+    return _show(slices, start, lap, col, extent, cmap, aspect, axis)
 
 
 def show_clusters(
     tissue_clusters: TissueClusters,
     slice: np.ndarray,
     ax: Axes | None = None,
-    aspect: int = 6,
+    extent: tuple[int, int, int, int] | None = None,
+    aspect: int | str = "auto",
 ) -> AxesImage | Axes:
     """Plot the clusters of all tissues in a slice.
 
     :param tissue_clusters: dictionary of tissues and their clusters
     :param slice: image slice to cluster
     :param ax: axis to plot on
+    :param aspect: aspect ratio of the image
+    :param extent: extent of the image, can be set to change the reference frame
     :return: None.
     """
     ax = ax or plt.gca()
 
-    # create an empty array for cluster labels
+    if extent is None:
+        extent = [0, slice.shape[0], 0, slice.shape[1]]
+
     cluster_labels = slice.copy()
+    # Calculate the scaling factors based on the extent and slice shape
+    x_scale = (extent[1] - extent[0]) / slice.shape[0]
+    y_scale = (extent[3] - extent[2]) / slice.shape[1]
 
     for tissue in TissueLabel:
         for label, data in enumerate(tissue_clusters.get_cluster_for_label(tissue)):
             # plot clusters with different colors
             cluster_labels[tuple(np.array(data.datapoints).T)] = (label + 1) * 10
-            ax.scatter(data.center[0], data.center[1], color="red", marker="*", s=20)
-    ax.imshow(cluster_labels.T, aspect=aspect, origin="lower")
-    return ax
-
-
-def show_only_clusters(
-    tissue_clusters: TissueClusters,
-    slice: np.ndarray,
-    ax: Axes | None = None,
-) -> AxesImage | Axes:
-    """Plot only the clusters of all tissues in a slice.
-
-    :param tissue_clusters: dictionary of tissues and their clusters
-    :param slice: image slice to cluster
-    :param ax: axis to plot on
-    :return: None.
-    """
-    ax = ax or plt.gca()
-
-    # create an empty array for cluster labels
-    cluster_labels = np.ones_like(slice) * 0
-
-    for tissue in TissueLabel:
-        for label, data in enumerate(tissue_clusters.get_cluster_for_label(tissue)):
+            x = data.center[0] * x_scale + extent[0]
+            y = data.center[1] * y_scale + extent[2]
             # plot clusters with different colors
-            cluster_labels[tuple(np.array(data.datapoints).T)] = (label + 1) * 10
-            ax.scatter(data.center[0], data.center[1], color="red", marker="*", s=20)
-    ax.imshow(cluster_labels.T, aspect=6, origin="lower")
+            ax.scatter(x, y, color="red", marker="*", s=20)
+    ax.imshow(cluster_labels.T, origin="lower", extent=extent, aspect=aspect)
     return ax

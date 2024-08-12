@@ -34,18 +34,18 @@ from gymnasium.spaces import Box, Space
 log = logging.getLogger(__name__)
 
 
-class LabelmapEnvTerminationCriterion(TerminationCriterion["LabelmapEnv"], ABC):
+class LabelmapEnvTerminationCriterion(TerminationCriterion["ArmscanEnv"], ABC):
     def __init__(
         self,
         min_reward_threshold: float = -0.05,
     ):
         self.min_reward_threshold = min_reward_threshold
 
-    def should_terminate(self, env: "LabelmapEnv") -> bool:
+    def should_terminate(self, env: "ArmscanEnv") -> bool:
         return env.cur_reward > self.min_reward_threshold
 
 
-class LabelmapEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
+class ArmscanEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
     """:param name2volume: mapping from labelmap names to volumes. One of these volumes will be selected at reset.
     :param observation: defines the observation space, e.g. `LabelmapSliceObservation`
     :param reward_metric: defines the reward metric that will be used, e.g. `LabelmapClusteringBasedReward`

@@ -66,7 +66,7 @@ if __name__ == "__main__":
         reward_metric=LabelmapClusteringBasedReward(),
         project_actions_to="y",
         apply_volume_transformation=True,
-        add_reward_details=4,
+        best_reward_memory=4,
     )
 
     experiment = (

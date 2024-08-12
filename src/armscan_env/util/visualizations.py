@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 from armscan_env.clustering import TissueClusters, TissueLabel
 from matplotlib import pyplot as plt
@@ -6,14 +8,14 @@ from matplotlib.image import AxesImage
 
 
 def _show(
-    slices: list,
+    slices: list[np.ndarray],
     start: int,
     lap: int,
     col: int,
     extent: tuple[int, int, int, int] | None,
     cmap: str | None,
-    aspect: float | str,
     axis: bool,
+    **imshow_kwargs: Any,
 ) -> AxesImage | Axes:
     """Function to display row of image slices.
 
@@ -23,18 +25,22 @@ def _show(
     :param col: number of columns to display
     :param extent: extent of the image
     :param cmap: color map to use
-    :param aspect: aspect ratio of each image
+    :param axis: whether to display axis
+    :param imshow_kwargs: additional keyword arguments to pass to imshow
     :return: None.
     """
     if extent is None:
-        extent = [0, slices[0].shape[1], 0, slices[0].shape[0]]
+        if isinstance(slices[0], np.ndarray) and isinstance(slices[0].shape, tuple):
+            extent = (0, slices[0].shape[0], 0, slices[0].shape[1])
+        else:
+            raise TypeError("Expected slice to be a numpy array with a shape attribute of type tuple.")
 
     rows = -(-len(slices) // col)
     fig, ax = plt.subplots(rows, col, figsize=(15, 2 * rows))
     # Flatten the ax array to simplify indexing
     ax = ax.flatten()
     for i, slice in enumerate(slices):
-        ax[i].imshow(slice, cmap=cmap, origin="lower", aspect=aspect, extent=extent)
+        ax[i].imshow(slice, cmap=cmap, origin="lower", extent=extent, **imshow_kwargs)
         ax[i].set_title(f"Slice {start - i * lap}")  # Set titles if desired
         ax[i].axis("off") if not axis else None  # Turn off axis if desired
     # Adjust layout to prevent overlap of titles
@@ -50,8 +56,8 @@ def show_slices(
     col: int = 5,
     extent: tuple[int, int, int, int] | None = None,
     cmap: str | None = None,
-    aspect: float | str = "auto",
     axis: bool = False,
+    **imshow_kwargs: Any,
 ) -> AxesImage | Axes:
     """Function to display row of image slices.
 
@@ -62,7 +68,8 @@ def show_slices(
     :param col: number of columns to display
     :param extent: extent of the image, can be set to change the reference frame
     :param cmap: color map to use
-    :param aspect: aspect ratio of each image
+    :param axis: whether to display axis
+    :param imshow_kwargs: additional keyword arguments to pass to imshow
     :return: None.
     """
     it = 0
@@ -72,7 +79,7 @@ def show_slices(
         slices.append(data[:, slice, :])
         if it == end:
             break
-    return _show(slices, start, lap, col, extent, cmap, aspect, axis)
+    return _show(slices, start, lap, col, extent, cmap, axis, **imshow_kwargs)
 
 
 def show_clusters(
@@ -80,21 +87,23 @@ def show_clusters(
     slice: np.ndarray,
     ax: Axes | None = None,
     extent: tuple[int, int, int, int] | None = None,
-    aspect: int | str = "auto",
+    **imshow_kwargs: Any,
 ) -> AxesImage | Axes:
     """Plot the clusters of all tissues in a slice.
 
     :param tissue_clusters: dictionary of tissues and their clusters
     :param slice: image slice to cluster
     :param ax: axis to plot on
-    :param aspect: aspect ratio of the image
     :param extent: extent of the image, can be set to change the reference frame
     :return: None.
     """
     ax = ax or plt.gca()
 
     if extent is None:
-        extent = [0, slice.shape[0], 0, slice.shape[1]]
+        if isinstance(slice, np.ndarray) and isinstance(slice.shape, tuple):
+            extent = (0, slice.shape[0], 0, slice.shape[1])
+        else:
+            raise TypeError("Expected slice to be a numpy array with a shape attribute of type tuple.")
 
     cluster_labels = slice.copy()
     # Calculate the scaling factors based on the extent and slice shape
@@ -109,5 +118,5 @@ def show_clusters(
             y = data.center[1] * y_scale + extent[2]
             # plot clusters with different colors
             ax.scatter(x, y, color="red", marker="*", s=20)
-    ax.imshow(cluster_labels.T, origin="lower", extent=extent, aspect=aspect)
+    ax.imshow(cluster_labels.T, origin="lower", extent=extent, **imshow_kwargs)
     return ax

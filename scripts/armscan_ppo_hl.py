@@ -7,7 +7,7 @@ from armscan_env.envs.observations import (
     LabelmapSliceAsChannelsObservation,
 )
 from armscan_env.envs.rewards import LabelmapClusteringBasedReward
-from armscan_env.network import ActorFactoryArmscanDQN
+from armscan_env.network import ActorFactoryArmscanNet
 from armscan_env.volumes.loading import RegisteredLabelmap
 from armscan_env.wrapper import ArmscanEnvFactory
 
@@ -85,7 +85,7 @@ if __name__ == "__main__":
                 dist_fn=DistributionFunctionFactoryIndependentGaussians(),
             ),
         )
-        .with_actor_factory(ActorFactoryArmscanDQN())
+        .with_actor_factory(ActorFactoryArmscanNet())
         .with_critic_factory_use_actor()
     )
     experiment = builder.build()

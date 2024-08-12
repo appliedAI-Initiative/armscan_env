@@ -18,7 +18,7 @@ from armscan_env.envs.base import (
     TerminationCriterion,
 )
 from armscan_env.envs.labelmaps_navigation import (
-    LabelmapEnv,
+    ArmscanEnv,
     LabelmapEnvTerminationCriterion,
 )
 from armscan_env.envs.observations import (
@@ -48,10 +48,10 @@ log = logging.getLogger(__name__)
 
 # Todo: Issue on gymnasium for not overwriting reset method
 class PatchedWrapper(Wrapper[np.ndarray, float, np.ndarray, np.ndarray]):
-    def __init__(self, env: LabelmapEnv | Env):
+    def __init__(self, env: ArmscanEnv | Env):
         super().__init__(env)
         # Helps with IDE autocompletion
-        self.env = cast(LabelmapEnv, env)
+        self.env = cast(ArmscanEnv, env)
 
     def reset(self, **kwargs: Any) -> tuple[ObsType, dict[str, Any]]:
         return self.env.reset(**kwargs)
@@ -79,6 +79,27 @@ class PatchedActionWrapper(PatchedWrapper, ABC):
 
 
 class PatchedFrameStackObservation(PatchedWrapper):
+    """Had to copy-paste and adjust.
+
+    The inheriting from `RecordConstructorArgs` in original FrameStack is not possible together with
+    overridden getattr, which we however need in order to not become crazy.
+    So there is no way of fixing this after inheriting from original FrameStackObservation, wherefore
+    we copy-paste the whole class and adjust it.
+
+    Adjustments:
+        1. reset takes \*\*kwargs
+        2. render takes \*\*kwargs
+        3. \_\_getattr\_\_ is overridden to pass the attribute to the wrapped environment (like in pre-1.0 wrappers)
+        4. No inheritance from RecordConstructorArgs
+        5. Observation space is converted to MultiBoxSpace if it is a DictSpace
+        6. Excluded observation keys are supported for Dict observation spaces
+
+    :param env: the environment to wrap
+    :param stack_size: the number of observations to stack
+    :param padding_type: the type of padding to use
+    :param excluded_observation_keys: the keys of the observations to exclude from stacking. The observations
+        with these keys will be passed through without stacking. Can only be used with Dict observation spaces.
+    """
     def __init__(
         self,
         env: Env[ObsType, ActType],
@@ -87,27 +108,6 @@ class PatchedFrameStackObservation(PatchedWrapper):
         padding_type: str | ObsType = "reset",
         excluded_observation_keys: Sequence[str] = (),
     ):
-        """Had to copy-paste and adjust.
-
-        The inheriting from `RecordConstructorArgs` in original FrameStack is not possible together with
-        overridden getattr, which we however need in order to not become crazy.
-        So there is no way of fixing this after inheriting from original FrameStackObservation, wherefore
-        we copy-paste the whole class and adjust it.
-
-        Adjustments:
-            1. reset takes **kwargs
-            2. render takes **kwargs
-            3. __getattr__ is overridden to pass the attribute to the wrapped environment (like in pre-1.0 wrappers)
-            4. No inheritance from RecordConstructorArgs
-            5. Observation space is converted to MultiBoxSpace if it is a DictSpace
-            6. Excluded observation keys are supported for Dict observation spaces
-
-        :param env: the environment to wrap
-        :param stack_size: the number of observations to stack
-        :param padding_type: the type of padding to use
-        :param excluded_observation_keys: the keys of the observations to exclude from stacking. The observations
-            with these keys will be passed through without stacking. Can only be used with Dict observation spaces.
-        """
         super().__init__(env)
 
         if not np.issubdtype(type(stack_size), np.integer):
@@ -166,12 +166,12 @@ class PatchedFrameStackObservation(PatchedWrapper):
 
         self.observation_space = observation_space
 
-    def _get_obs_from_queue(self) -> ObsType:
+    def _get_obs_from_queue(self) -> ObsType:  # type: ignore
         updated_obs = concatenate(self.env.observation_space, self.obs_queue, self.stacked_obs)
         for key in self.excluded_observation_keys:
             # replace the stacked observation with the original observation for the excluded keys
             if key in updated_obs:
-                updated_obs[key] = self.obs_queue[-1][key]
+                updated_obs[key] = self.obs_queue[-1][key]  # type: ignore
         return updated_obs
 
     def step(
@@ -181,7 +181,7 @@ class PatchedFrameStackObservation(PatchedWrapper):
         obs, reward, terminated, truncated, info = self.env.step(action)
         self.obs_queue.append(obs)
 
-        stacked_obs = self._get_obs_from_queue()
+        stacked_obs: ObsType = self._get_obs_from_queue()
         return stacked_obs, reward, terminated, truncated, info
 
     def reset(self, **kwargs: Any) -> tuple[ObsType, dict[str, Any]]:
@@ -193,7 +193,7 @@ class PatchedFrameStackObservation(PatchedWrapper):
             self.obs_queue.append(self.padding_value)
         self.obs_queue.append(obs)
 
-        stacked_obs = self._get_obs_from_queue()
+        stacked_obs: ObsType = self._get_obs_from_queue()
 
         return stacked_obs, info
 
@@ -232,7 +232,7 @@ class AddObservationsWrapper(Wrapper, ABC):
     before super().__init__(env) is called.
     """
 
-    def __init__(self, env: LabelmapEnv | Env):
+    def __init__(self, env: ArmscanEnv | Env):
         super().__init__(env)
         if isinstance(self.env.observation_space, Box) and isinstance(
             self.additional_obs_space,
@@ -272,6 +272,8 @@ class AddObservationsWrapper(Wrapper, ABC):
 
 
 class ObsRewardHeapItem(Generic[ObsType]):
+    """Heap of the best rewards and their corresponding observations.
+    """
     def __init__(self, obs: ObsType, reward: float):
         self.obs = obs
         self.reward = reward
@@ -296,6 +298,15 @@ class ObsRewardHeapItem(Generic[ObsType]):
 
 
 class ObsHeap(Generic[ObsType]):
+    """Heap of the best rewards and their corresponding observations.
+    The size of the heap is fixed and the best n rewards are kept.
+    When the first reward-observation pair is inserted, the heap is initialized with the padding value and item.
+    By default, padding is done with the first inserted value and item.
+
+    :param max_size: the maximum size of the heap
+    :param padding_value: the value to use for padding
+    :param padding_item: the item to use for padding
+    """
     def __init__(
         self,
         max_size: int,
@@ -329,24 +340,24 @@ class ObsHeap(Generic[ObsType]):
         return [item.get_obs() for item in self.heap]
 
 
-class AddRewardDetailsWrapper(AddObservationsWrapper):
+class BestActionRewardMemory(AddObservationsWrapper):
+    """Adds the action that would lead to the highest image variance to the observation.
+    In focus-stigmation agents, this helps in the initial exploratory phase of episodes, as it
+    allows wandering around the state space without worrying about losing track of the
+    best image found so far.
+
+    :param env: The environment to wrap.
+    :param n_best: Number of best states to keep track of.
+    """
     @property
     def additional_obs_space(self) -> gym.spaces:
         return self._additional_obs_space
 
     def __init__(
         self,
-        env: LabelmapEnv,
+        env: ArmscanEnv,
         n_best: int,
     ):
-        """Adds the action that would lead to the highest image variance to the observation.
-        In focus-stigmation agents, this helps in the initial exploratory phase of episodes, as it
-        allows wandering around the state space without worrying about losing track of the
-        best image found so far.
-
-        :param env:
-        :param n_best: Number of best states to keep track of.
-        """
         self.additional_obs = ActionRewardObservation(env.action_space.shape).to_array_observation()
         if n_best > 1:
             self._additional_obs_space = ConcatenatedArrayObservation.concatenate_boxes(
@@ -399,6 +410,8 @@ class AddRewardDetailsWrapper(AddObservationsWrapper):
 
 
 class ArmscanEnvFactory(EnvFactory):
+    """Factory for creating ArmscanEnv environments, making use of various wrappers.
+    """
     def __init__(
         self,
         name2volume: dict[str, sitk.Image],
@@ -418,7 +431,7 @@ class ArmscanEnvFactory(EnvFactory):
         n_stack: int = 1,
         project_actions_to: Literal["x", "y", "xy", "zy"] | None = None,
         apply_volume_transformation: bool = False,
-        add_reward_details: int = 0,
+        best_reward_memory: int = 0,
         exclude_keys_from_framestack: Sequence[str] = (),
         **make_kwargs: Any,
     ) -> None:
@@ -438,7 +451,7 @@ class ArmscanEnvFactory(EnvFactory):
         :param n_stack: the number of observations to stack in a single observation
         :param project_actions_to: constrains the action space to only x translation
         :param apply_volume_transformation: whether to apply transformations to the volume for data augmentation
-        :param add_reward_details: the number of best states to keep track of
+        :param best_reward_memory: the number of best states to keep track of
         :param exclude_keys_from_framestack: the keys of the observations to exclude from stacking
         :param make_kwargs: additional keyword arguments to pass to the environment creation function
         """
@@ -460,7 +473,7 @@ class ArmscanEnvFactory(EnvFactory):
         self.n_stack = n_stack
         self.project_actions_to = project_actions_to
         self.apply_volume_transformation = apply_volume_transformation
-        self.add_reward_details = add_reward_details
+        self.best_reward_memory = best_reward_memory
         self.exclude_keys_from_framestack = exclude_keys_from_framestack
         self.make_kwargs = make_kwargs
 
@@ -471,12 +484,12 @@ class ArmscanEnvFactory(EnvFactory):
         """
         return dict(self.make_kwargs)
 
-    def create_env(self, mode: EnvMode) -> LabelmapEnv:
+    def create_env(self, mode: EnvMode) -> ArmscanEnv:
         """Creates a single environment for the given mode.
 
-        :return: an environment
+        :return: ArmscanEnv environment
         """
-        env = LabelmapEnv(
+        env = ArmscanEnv(
             name2volume=self.name2volume,
             observation=self.observation,
             slice_shape=self.slice_shape,
@@ -498,9 +511,9 @@ class ArmscanEnvFactory(EnvFactory):
                 excluded_observation_keys=self.exclude_keys_from_framestack,
             )
         env = PatchedFlattenObservation(env)
-        if self.add_reward_details > 0:
-            env = AddRewardDetailsWrapper(
+        if self.best_reward_memory > 0:
+            env = BestActionRewardMemory(
                 env,
-                self.add_reward_details,
+                self.best_reward_memory,
             )
         return env

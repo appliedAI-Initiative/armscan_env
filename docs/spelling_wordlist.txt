@@ -63,3 +63,12 @@ config
 env
 octant
 octants
+NifTi
+resampled
+centro
+mri
+resampling
+stigmation
+kwargs
+getattr
+imshow

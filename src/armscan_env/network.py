@@ -32,8 +32,8 @@ def layer_init(layer: nn.Module, std: float = np.sqrt(2), bias_const: float = 0.
     return layer
 
 
-class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
-    """A composed network for DQN with a CNN for the channeled slice observation and an MLP for the action-reward
+class MultiMod_ArmScan_Net(nn.Module, Generic[TRecurrentState]):
+    """A composed network with a CNN for the channeled slice observation and an MLP for the action-reward
     observation.
     The CNN is composed of 3 convolutional layers with ReLU activation functions.
 
@@ -141,8 +141,8 @@ class DQN_MLP_Concat(nn.Module, Generic[TRecurrentState]):
         return self.final_processing_mlp(concat), state
 
 
-class ActorFactoryArmscanDQN(ActorFactory):
-    """A factory for creating DQN_MLP_Concat actors for the armscan_env."""
+class ActorFactoryArmscanNet(ActorFactory):
+    """A factory for creating MultiMod_ArmScan_Net actors for the armscan_env."""
 
     def __init__(
         self,
@@ -150,8 +150,8 @@ class ActorFactoryArmscanDQN(ActorFactory):
         super().__init__()
 
     def create_module(self, envs: Environments, device: TDevice) -> ActorProb:
-        """Creates a DQN_MLP_Concat actor for the given environments."""
-        # happens because the envs will be built based on LabelmapEnv and its observation_space attr
+        """Creates a MultiMod_ArmScan_Net actor for the given environments."""
+        # happens because the envs will be built based on ArmscanEnv and its observation_space attr
         # which then delivers this kind of tuple of tuples
         # Will fail with any other envs object but we can't currently express this in typing
         # TODO: improve tianshou typing to solve this in env.TObservationShape
@@ -168,7 +168,7 @@ class ActorFactoryArmscanDQN(ActorFactory):
                 _,
             ) = envs.get_observation_shape()  # type: ignore
 
-        net: DQN_MLP_Concat = DQN_MLP_Concat(
+        net: MultiMod_ArmScan_Net = MultiMod_ArmScan_Net(
             c=c,
             h=h,
             w=w,

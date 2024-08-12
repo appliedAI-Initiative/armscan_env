@@ -79,7 +79,7 @@ class PatchedActionWrapper(PatchedWrapper, ABC):
 
 
 class PatchedFrameStackObservation(PatchedWrapper):
-    """Had to copy-paste and adjust.
+    r"""Had to copy-paste and adjust.
 
     The inheriting from `RecordConstructorArgs` in original FrameStack is not possible together with
     overridden getattr, which we however need in order to not become crazy.
@@ -100,6 +100,7 @@ class PatchedFrameStackObservation(PatchedWrapper):
     :param excluded_observation_keys: the keys of the observations to exclude from stacking. The observations
         with these keys will be passed through without stacking. Can only be used with Dict observation spaces.
     """
+
     def __init__(
         self,
         env: Env[ObsType, ActType],
@@ -272,8 +273,8 @@ class AddObservationsWrapper(Wrapper, ABC):
 
 
 class ObsRewardHeapItem(Generic[ObsType]):
-    """Heap of the best rewards and their corresponding observations.
-    """
+    """Heap of the best rewards and their corresponding observations."""
+
     def __init__(self, obs: ObsType, reward: float):
         self.obs = obs
         self.reward = reward
@@ -307,6 +308,7 @@ class ObsHeap(Generic[ObsType]):
     :param padding_value: the value to use for padding
     :param padding_item: the item to use for padding
     """
+
     def __init__(
         self,
         max_size: int,
@@ -349,6 +351,7 @@ class BestActionRewardMemory(AddObservationsWrapper):
     :param env: The environment to wrap.
     :param n_best: Number of best states to keep track of.
     """
+
     @property
     def additional_obs_space(self) -> gym.spaces:
         return self._additional_obs_space
@@ -410,8 +413,8 @@ class BestActionRewardMemory(AddObservationsWrapper):
 
 
 class ArmscanEnvFactory(EnvFactory):
-    """Factory for creating ArmscanEnv environments, making use of various wrappers.
-    """
+    """Factory for creating ArmscanEnv environments, making use of various wrappers."""
+
     def __init__(
         self,
         name2volume: dict[str, sitk.Image],

@@ -33,7 +33,9 @@ def _show(
         if isinstance(slices[0], np.ndarray) and isinstance(slices[0].shape, tuple):
             extent = (0, slices[0].shape[0], 0, slices[0].shape[1])
         else:
-            raise TypeError("Expected slice to be a numpy array with a shape attribute of type tuple.")
+            raise TypeError(
+                "Expected slice to be a numpy array with a shape attribute of type tuple.",
+            )
 
     rows = -(-len(slices) // col)
     fig, ax = plt.subplots(rows, col, figsize=(15, 2 * rows))
@@ -103,7 +105,9 @@ def show_clusters(
         if isinstance(slice, np.ndarray) and isinstance(slice.shape, tuple):
             extent = (0, slice.shape[0], 0, slice.shape[1])
         else:
-            raise TypeError("Expected slice to be a numpy array with a shape attribute of type tuple.")
+            raise TypeError(
+                "Expected slice to be a numpy array with a shape attribute of type tuple.",
+            )
 
     cluster_labels = slice.copy()
     # Calculate the scaling factors based on the extent and slice shape

@@ -58,6 +58,24 @@ class RegisteredLabelmap(Enum):
             volumes = normalize_sitk_volumes_to_highest_spacing(volumes)
         return volumes
 
+    def load_cropped_labelmap(self) -> ImageVolume:
+        cropped_volume = sitk.ReadImage(
+            config.get_single_cropped_labelmap_path(self.get_labelmap_id()),
+        )
+        volume = sitk.ReadImage(config.get_single_labelmap_path(self.get_labelmap_id()))
+        cropped_y = (volume.GetSize()[1] - cropped_volume.GetSize()[1]) * volume.GetSpacing()[1]
+        optimal_action = self.get_optimal_action()
+        cropped_opt_y = optimal_action.translation[1] - cropped_y
+        optimal_action.translation = (0, cropped_opt_y)
+        return ImageVolume(cropped_volume, optimal_action=optimal_action)
+
+    @classmethod
+    def load_all_cropped_labelmaps(cls, normalize_spacing: bool = True) -> list[ImageVolume]:
+        volumes = [labelmap.load_cropped_labelmap() for labelmap in list(cls)[:4]]
+        if normalize_spacing:
+            volumes = normalize_sitk_volumes_to_highest_spacing(volumes)
+        return volumes
+
 
 def normalize_sitk_volumes_to_highest_spacing(
     volumes: list[ImageVolume],  # n_spacing: tuple[float, float, float],
@@ -104,10 +122,14 @@ def normalize_sitk_volumes_to_highest_spacing(
 
 def load_sitk_volumes(
     normalize: bool = True,
+    cropped: bool = False,
 ) -> list[ImageVolume]:
     """Load a SimpleITK volume from a file.
 
     :param normalize: whether to normalize the volumes to a single spacing
+    :param cropped: whether to load the cropped volumes for simplified experiment
     :return: the loaded volume
     """
+    if cropped:
+        return RegisteredLabelmap.load_all_cropped_labelmaps(normalize_spacing=normalize)
     return RegisteredLabelmap.load_all_labelmaps(normalize_spacing=normalize)

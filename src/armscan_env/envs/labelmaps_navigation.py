@@ -426,7 +426,7 @@ class ArmscanEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
             raise RuntimeError("The labelmap volume must not be None, did you call reset?")
 
         volume = self.cur_labelmap_volume
-        o = volume.GetOrigin()
+        volume.GetOrigin()
         img_array = sitk.GetArrayFromImage(volume)
         action = self.get_manipulator_action_from_normalized_action(
             self.cur_state_action.normalized_action_arr,
@@ -434,31 +434,34 @@ class ArmscanEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
         translation = action.translation
         rotation = action.rotation
 
+        size = tuple(volume.GetSize()) * np.array(volume.GetSpacing())
+        transversal_extent = (0, size[0], 0, size[2])
+        longitudinal_extent = (0, size[2], size[1], 0)
+        frontal_extent = (0, size[0], size[1], 0)
+
         # Subplot 1: from the top
         iz = volume.GetSize()[2] // 2
-        ax1.imshow(img_array[iz, :, :])
-        x_dash = np.arange(img_array.shape[2])
-        b = volume.TransformPhysicalPointToIndex(
-            [o[0] + translation[0], o[1] + translation[1], o[2]],
-        )[1]
-        b_x = b + np.tan(np.deg2rad(rotation[1])) * iz
+        ax1.imshow(img_array[iz, :, :], extent=frontal_extent)
+        x_dash = np.arange(size[0])
+        b = translation[1]
+        b_x = b + np.tan(np.deg2rad(rotation[1])) * (size[2] // 2)
         y_dash = np.tan(np.deg2rad(rotation[0])) * x_dash + b_x
-        y_dash = np.clip(y_dash, 0, img_array.shape[1] - 1)
+        y_dash = np.clip(y_dash, 0, size[1] - 1)
         ax1.plot(x_dash, y_dash, linestyle="--", color="red")
-        ax1.set_title(f"Slice cut (labelmap name: {self.cur_labelmap_name})")
+        ax1.set_title("Slice cut")
 
         # Subplot 2: from the side
         ix = volume.GetSize()[0] // 2
-        ax2.imshow(img_array[:, :, ix].T)
-        z_dash = np.arange(img_array.shape[0])
-        b_z = b + np.tan(np.deg2rad(rotation[0])) * ix
+        ax2.imshow(img_array[:, :, ix].T, extent=longitudinal_extent)
+        z_dash = np.arange(size[2])
+        b_z = b + np.tan(np.deg2rad(rotation[0])) * (size[0] // 2)
         y_dash_2 = np.tan(np.deg2rad(rotation[1])) * z_dash + b_z
-        y_dash_2 = np.clip(y_dash_2, 0, img_array.shape[1] - 1)
+        y_dash_2 = np.clip(y_dash_2, 0, size[1] - 1)
         ax2.plot(z_dash, y_dash_2, linestyle="--", color="red")
 
         # ACTION
         sliced_img = self.cur_state_action.labels_2d_slice
-        ax3.imshow(sliced_img.T, origin="lower", aspect=6)
+        ax3.imshow(sliced_img.T, origin="lower", extent=transversal_extent, aspect=2)
 
         txt = (
             "Slice taken at position:\n"
@@ -474,7 +477,7 @@ class ArmscanEnv(ModularEnv[LabelmapStateAction, np.ndarray, np.ndarray]):
 
         # OBSERVATION
         clusters = TissueClusters.from_labelmap_slice(self.cur_state_action.labels_2d_slice)
-        show_clusters(clusters, sliced_img, ax5)
+        show_clusters(clusters, sliced_img, ax5, extent=transversal_extent, aspect=2)
 
         # REWARD
         ax5.text(0, 0, f"Reward: {self.cur_reward:.2f}", fontsize=12, color="red")

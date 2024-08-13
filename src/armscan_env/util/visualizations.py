@@ -16,7 +16,7 @@ def _show(
     cmap: str | None,
     axis: bool,
     **imshow_kwargs: Any,
-) -> AxesImage | Axes:
+) -> np.ndarray[Any, Any]:
     """Function to display row of image slices.
 
     :param slices: list of image slices
@@ -33,13 +33,17 @@ def _show(
         if isinstance(slices[0], np.ndarray) and isinstance(slices[0].shape, tuple):
             extent = (0, slices[0].shape[0], 0, slices[0].shape[1])
         else:
-            raise TypeError("Expected slice to be a numpy array with a shape attribute of type tuple.")
+            raise TypeError(
+                "Expected slice to be a numpy array with a shape attribute of type tuple.",
+            )
 
     rows = -(-len(slices) // col)
     fig, ax = plt.subplots(rows, col, figsize=(15, 2 * rows))
     # Flatten the ax array to simplify indexing
-    ax = ax.flatten()
+    ax = ax.flatten() if isinstance(ax, np.ndarray) else np.array(ax)
     for i, slice in enumerate(slices):
+        if i >= ax.size:
+            break
         ax[i].imshow(slice, cmap=cmap, origin="lower", extent=extent, **imshow_kwargs)
         ax[i].set_title(f"Slice {start - i * lap}")  # Set titles if desired
         ax[i].axis("off") if not axis else None  # Turn off axis if desired
@@ -58,7 +62,7 @@ def show_slices(
     cmap: str | None = None,
     axis: bool = False,
     **imshow_kwargs: Any,
-) -> AxesImage | Axes:
+) -> np.ndarray[Any, Any]:
     """Function to display row of image slices.
 
     :param data: 3D image data
@@ -103,7 +107,9 @@ def show_clusters(
         if isinstance(slice, np.ndarray) and isinstance(slice.shape, tuple):
             extent = (0, slice.shape[0], 0, slice.shape[1])
         else:
-            raise TypeError("Expected slice to be a numpy array with a shape attribute of type tuple.")
+            raise TypeError(
+                "Expected slice to be a numpy array with a shape attribute of type tuple.",
+            )
 
     cluster_labels = slice.copy()
     # Calculate the scaling factors based on the extent and slice shape

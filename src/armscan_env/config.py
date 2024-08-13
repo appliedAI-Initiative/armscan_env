@@ -34,6 +34,20 @@ class __Configuration(DefaultDataConfiguration):
             check_existence=True,
         )
 
+    def get_cropped_labelmaps_basedir(self) -> str:
+        return self._adjusted_path(
+            os.path.join(self.data, "cropped"),
+            relative=False,
+            check_existence=True,
+        )
+
+    def get_single_cropped_labelmap_path(self, labelmap_file_id: int) -> str:
+        single_labelmap_path = os.path.join(
+            self.get_cropped_labelmaps_basedir(),
+            f"{labelmap_file_id:05d}_cropped.nii",
+        )
+        return self._adjusted_path(single_labelmap_path, relative=False, check_existence=True)
+
     def count_labels(self) -> int:
         labels_dir = self.get_labelmaps_basedir()
         return len(

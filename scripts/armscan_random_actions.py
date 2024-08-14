@@ -19,7 +19,6 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     volumes = load_sitk_volumes()
-    n_random_steps = 500000
 
     log_name = os.path.join(
         "random-actions",
@@ -27,8 +26,9 @@ if __name__ == "__main__":
         datetime_tag(),
     )
     sampling_config = SamplingConfig(
-        num_epochs=1,
-        step_per_epoch=n_random_steps,
+        num_epochs=50,
+        step_per_epoch=10000,
+        step_per_collect=10,
     )
 
     volume_size = volumes[0].GetSize()

@@ -1,7 +1,6 @@
 import logging
 import os
 
-from armscan_env.config import get_config
 from armscan_env.envs.labelmaps_navigation import LabelmapEnvTerminationCriterion
 from armscan_env.envs.observations import (
     ActionRewardObservation,
@@ -21,7 +20,6 @@ from tianshou.highlevel.params.alpha import AutoAlphaFactoryDefault
 from tianshou.highlevel.params.policy_params import SACParams
 
 if __name__ == "__main__":
-    config = get_config()
     logging.basicConfig(level=logging.INFO)
 
     volumes = load_sitk_volumes()

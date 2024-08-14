@@ -19,7 +19,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     volumes = load_sitk_volumes()
-    n_random_steps = 100000
+    n_random_steps = 2000
     seed = 42
 
     log_name = os.path.join(
@@ -30,6 +30,7 @@ if __name__ == "__main__":
     sampling_config = SamplingConfig(
         num_epochs=1,
         step_per_epoch=n_random_steps,
+        step_per_collect=500,
     )
 
     volume_size = volumes[0].GetSize()
@@ -53,7 +54,7 @@ if __name__ == "__main__":
         venv_type=VectorEnvType.SUBPROC_SHARED_MEM_AUTO,
         termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.05),
         reward_metric=LabelmapClusteringBasedReward(),
-        project_actions_to="y",
+        project_actions_to="zy",
         apply_volume_transformation=True,
         best_reward_memory=0,
     )

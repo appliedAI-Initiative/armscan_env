@@ -19,8 +19,7 @@ if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
 
     volumes = load_sitk_volumes()
-    n_random_steps = 100000
-    seed = 42
+    n_random_steps = 500000
 
     log_name = os.path.join(
         "random-actions",
@@ -49,13 +48,12 @@ if __name__ == "__main__":
         max_episode_len=50,
         rotation_bounds=(90.0, 45.0),
         translation_bounds=(None, None),
-        seed=seed,
+        seed=ExperimentConfig.seed,
         venv_type=VectorEnvType.SUBPROC_SHARED_MEM_AUTO,
         termination_criterion=LabelmapEnvTerminationCriterion(min_reward_threshold=-0.05),
         reward_metric=LabelmapClusteringBasedReward(),
-        project_actions_to="y",
+        project_actions_to="zy",
         apply_volume_transformation=True,
-        best_reward_memory=0,
     )
     experiment = RandomActionExperimentBuilder(env_factory, sampling_config=sampling_config).build()
 

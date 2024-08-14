@@ -4501,6 +4501,20 @@ objc = ["pyobjc-framework-Cocoa"]
 win32 = ["pywin32"]
 
 [[package]]
+name = "sensai-utils"
+version = "1.2.1"
+description = "Utilities from sensAI, the Python library for sensible AI"
+optional = false
+python-versions = "*"
+files = [
+    {file = "sensai_utils-1.2.1-py3-none-any.whl", hash = "sha256:222e60d9f9d371c9d62ffcd1e6def1186f0d5243588b0b5af57e983beecc95bb"},
+    {file = "sensai_utils-1.2.1.tar.gz", hash = "sha256:4d8ca94179931798cef5f920fb042cbf9e7d806c0026b02afb58d0f72211bf27"},
+]
+
+[package.dependencies]
+typing-extensions = ">=4.6"
+
+[[package]]
 name = "setuptools"
 version = "72.2.0"
 description = "Easily download, build, install, upgrade, and uninstall Python packages"
@@ -5723,4 +5737,4 @@ test = ["big-O", "importlib-resources", "jaraco.functools", "jaraco.itertools", 
 [metadata]
 lock-version = "2.0"
 python-versions = "^3.11"
-content-hash = "74ead410223f2caed225c4476c584c4be59ff55ebd98ff353d914fc1f62a1555"
+content-hash = "77e92f1ebcb639d21a1a063ed14fa552bca7edf55ba8a73455e245c07f875d73"

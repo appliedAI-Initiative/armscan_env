@@ -10,6 +10,7 @@ from armscan_env.envs.rewards import LabelmapClusteringBasedReward
 from armscan_env.network import ActorFactoryArmscanNet
 from armscan_env.volumes.loading import RegisteredLabelmap
 from armscan_env.wrapper import ArmscanEnvFactory
+from sensai.util.logging import datetime_tag
 
 from tianshou.highlevel.config import SamplingConfig
 from tianshou.highlevel.env import VectorEnvType
@@ -19,7 +20,6 @@ from tianshou.highlevel.experiment import (
 )
 from tianshou.highlevel.params.alpha import AutoAlphaFactoryDefault
 from tianshou.highlevel.params.policy_params import SACParams
-from tianshou.utils.logging import datetime_tag
 
 if __name__ == "__main__":
     config = get_config()

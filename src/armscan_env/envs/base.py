@@ -69,6 +69,15 @@ class ArrayObservation(Observation[TStateAction, np.ndarray], Generic[TStateActi
         pass
 
 
+class DummyArrayObservation(ArrayObservation[Any]):
+    def compute_observation(self, state: Any) -> np.ndarray:
+        return np.array([0.5])
+
+    @property
+    def observation_space(self) -> gym.spaces.Space[TObs]:
+        return gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)
+
+
 class DictObservation(Observation[TStateAction, dict[str, np.ndarray]], Generic[TStateAction], ABC):
     pass
 
@@ -82,6 +91,17 @@ class DictObservation(Observation[TStateAction, dict[str, np.ndarray]], Generic[
 
     def merged_with(self, other: Self) -> "MergedDictObservation[TStateAction]":
         return MergedDictObservation([self, other])
+
+
+class DummyDictObservation(DictObservation[Any]):
+    def compute_observation(self, state: Any) -> dict[str, np.ndarray]:
+        return {"dummy": np.array([0.5])}
+
+    @property
+    def observation_space(self) -> gym.spaces.Dict:
+        return gym.spaces.Dict(
+            {"dummy": gym.spaces.Box(low=0, high=1, shape=(1,), dtype=np.float32)},
+        )
 
 
 class ConcatenatedArrayObservation(ArrayObservation[TStateAction], Generic[TStateAction]):

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import cast, Sequence
+from typing import cast
 
 from armscan_env.volumes.loading import load_sitk_volumes
 from armscan_env.wrapper import ArmscanEnvFactory
@@ -8,7 +8,7 @@ from tianshou.highlevel.env import EnvMode
 from tianshou.highlevel.experiment import Experiment
 
 # Place your path here
-saved_experiment_dir = Path("log/sac-characteristic-array-rew-details-y/42/20240630-191219")
+saved_experiment_dir = Path("log/ppo/42/4_stack-lin_sweep_v1/20240605-180933")
 
 if __name__ == "__main__":
     volumes = load_sitk_volumes()
@@ -38,8 +38,12 @@ if __name__ == "__main__":
         apply_volume_transformation=old_env_factory.apply_volume_transformation,
         best_reward_memory=0,
         exclude_keys_from_framestack=(),
-        **old_env_factory.make_kwargs
+        **old_env_factory.make_kwargs,
     )
+
+    restored_experiment.env_factory = env_factory
+    restored_policy = restored_experiment.create_experiment_world().policy
+    # this can be now used to perform actions, you can also use a notebook
 
     # Create env manually and run policy on it
     restored_env = env_factory.create_env(mode=EnvMode.WATCH)

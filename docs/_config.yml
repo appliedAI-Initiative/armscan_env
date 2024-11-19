@@ -10,10 +10,10 @@
 # Book settings
 title                       : armscan_env Documentation  # The title of the book. Will be placed in the left navbar.
 author                      : armscan_env contributors  # The author of the book
-copyright                   : ""  # Copyright year to be placed in the footer
+copyright                   : "2024"  # Copyright year to be placed in the footer
 logo                        : "" # A path to the book logo
 # Patterns to skip when building the book. Can be glob-style (e.g. "*skip.ipynb")
-exclude_patterns            : ['**.ipynb_checkpoints', '.DS_Store', 'Thumbs.db', '_build', 'jupyter_execute', '.jupyter_cache', '.pytest_cache', 'docs/autogen_rst.py', 'docs/create_toc.py']
+exclude_patterns            : ['**.ipynb_checkpoints', '.DS_Store', 'Thumbs.db', '_build', 'jupyter_execute', '.jupyter_cache', '.pytest_cache', 'docs/autogen_rst.py', 'docs/create_toc.py', 'docs/tex_to_rst.py']
 # Auto-exclude files not in the toc
 only_build_toc_files        : false
 
@@ -35,13 +35,13 @@ parse:
   myst_enable_extensions: # default extensions to enable in the myst parser. See https://myst-parser.readthedocs.io/en/latest/using/syntax-optional.html
     - amsmath
     - colon_fence
-    # - deflist
+    - deflist
     - dollarmath
-    # - html_admonition
-    # - html_image
+    - html_admonition
+    - html_image
     - linkify
-    # - replacements
-    # - smartquotes
+    - replacements
+    - smartquotes
     - substitution
     - tasklist
   myst_url_schemes: [ mailto, http, https ] # URI schemes that will be recognised as external URLs in Markdown links
@@ -52,14 +52,12 @@ parse:
 html:
   favicon                   : ""  # A path to a favicon image
   use_edit_page_button      : false  # Whether to add an "edit this page" button to pages. If `true`, repository information in repository: must be filled in
-  use_repository_button     : false  # Whether to add a link to your repository button
-  use_issues_button         : false  # Whether to add an "open an issue" button
+  use_repository_button     : true  # Whether to add a link to your repository button
+  use_issues_button         : true  # Whether to add an "open an issue" button
   use_multitoc_numbering    : true   # Continuous numbering across parts/chapters
   extra_footer              : ""
-  google_analytics_id       : ""  # A GA id that can be used to track book views.
   home_page_in_navbar       : true  # Whether to include your home page in the left Navigation Bar
   baseurl                   : "https://github.com/appliedAI-Initiative/armscan_env"
-  analytics:
 
   comments:
     hypothesis              : false
@@ -101,11 +99,16 @@ sphinx:
   local_extensions          :   # A list of local extensions to load by sphinx specified by "name: path" items
   recursive_update          : false # A boolean indicating whether to overwrite the Sphinx config (true) or recursively update (false)
   config                    :   # key-value pairs to directly over-ride the Sphinx configuration
+    bibtex_bibfiles: 
+      - refs.bib
     autodoc_typehints_format: "short"
-    suppress_warnings: ["mystnb.unknown_mime_type"]  # needed for plotly rendering
+    suppress_warnings: 
+      - mystnb.unknown_mime_type  # suppress warnings about unknown mime types
+    spelling_exclude_patterns:
+      - '01_background/*.rst'
     autodoc_show_sourcelink: True
     add_module_names: False
-    github_username: Carlo Cagnetta}
+    github_username: Carlo Cagnetta
     github_repository: armscan_env
     python_use_unqualified_type_names: True
     nb_mime_priority_overrides: [

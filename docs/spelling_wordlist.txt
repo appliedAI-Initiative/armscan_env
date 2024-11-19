@@ -72,3 +72,6 @@ stigmation
 kwargs
 getattr
 imshow
+Nassir
+Navab
+preprocessing
